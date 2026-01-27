@@ -49,14 +49,27 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Printf("Warning: failed to close client: %v", err)
+		}
+	}()
 
-	fmt.Println("✓ Client initialized with multi-agent support!\n")
+	fmt.Println("✓ Client initialized with multi-agent support!")
 
 	ctx := context.Background()
 	userID := "user789"
 
-	fmt.Println("=== Multi-Agent Collaboration Scenario ===\n")
+	// Clean up any existing memories for this user (optional, for demo purposes)
+	fmt.Println("\nCleaning up existing memories...")
+	err = client.DeleteAll(ctx, powermem.WithUserIDForDeleteAll(userID))
+	if err != nil {
+		log.Printf("Warning: failed to clean up: %v", err)
+	} else {
+		fmt.Println("✓ Cleanup completed!")
+	}
+
+	fmt.Println("\n=== Multi-Agent Collaboration Scenario ===")
 
 	// 场景：三个 AI 代理协作处理用户请求
 	// - Agent1: 个人助手（私有记忆）

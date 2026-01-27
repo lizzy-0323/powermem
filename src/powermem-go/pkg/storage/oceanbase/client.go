@@ -11,14 +11,14 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/storage"
 )
 
-// Client OceanBase 客户端
+// Client is an OceanBase client.
 type Client struct {
 	db             *sql.DB
 	config         *Config
 	collectionName string
 }
 
-// Config OceanBase 配置
+// Config contains OceanBase configuration.
 type Config struct {
 	Host               string
 	Port               int
@@ -29,7 +29,7 @@ type Config struct {
 	EmbeddingModelDims int
 }
 
-// NewClient 创建新的 OceanBase 客户端
+// NewClient creates a new OceanBase client.
 func NewClient(cfg *Config) (*Client, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
@@ -39,7 +39,7 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("NewOceanBaseClient: %w", err)
 	}
 
-	// 测试连接
+	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("NewOceanBaseClient: %w", err)
 	}
@@ -50,7 +50,7 @@ func NewClient(cfg *Config) (*Client, error) {
 		collectionName: cfg.CollectionName,
 	}
 
-	// 初始化表结构
+	// Initialize table structure
 	if err := client.initTables(context.Background()); err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func NewClient(cfg *Config) (*Client, error) {
 	return client, nil
 }
 
-// initTables 初始化数据库表
+// initTables initializes the database table.
 func (c *Client) initTables(ctx context.Context) error {
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
@@ -84,7 +84,7 @@ func (c *Client) initTables(ctx context.Context) error {
 	return nil
 }
 
-// Insert 插入记忆
+// Insert inserts a memory.
 func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s 
@@ -117,7 +117,7 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	return nil
 }
 
-// Search 向量搜索
+// Search performs vector search.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
 	queryVectorStr := vectorToString(embedding)
 
@@ -134,7 +134,7 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		LIMIT ?
 	`, c.collectionName, whereClause)
 
-	// 将查询向量添加到参数列表的开头
+	// Add query vector to the beginning of parameter list
 	allArgs := append([]interface{}{queryVectorStr}, args...)
 	allArgs = append(allArgs, opts.Limit)
 
@@ -142,12 +142,12 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 	if err != nil {
 		return nil, fmt.Errorf("Search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return c.scanMemories(rows, true)
 }
 
-// Get 根据 ID 获取记忆
+// Get retrieves a memory by ID.
 func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, content, embedding, metadata,
@@ -169,7 +169,7 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update 更新记忆
+// Update updates a memory.
 func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
 	vectorStr := vectorToString(embedding)
 
@@ -193,11 +193,11 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 		return nil, fmt.Errorf("Update: not found")
 	}
 
-	// 返回更新后的记忆
+	// Return updated memory
 	return c.Get(ctx, id)
 }
 
-// Delete 删除记忆
+// Delete deletes a memory.
 func (c *Client) Delete(ctx context.Context, id int64) error {
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", c.collectionName)
 
@@ -218,7 +218,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetAll 获取所有记忆
+// GetAll retrieves all memories.
 func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*storage.Memory, error) {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -237,12 +237,12 @@ func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*st
 	if err != nil {
 		return nil, fmt.Errorf("GetAll: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return c.scanMemories(rows, false)
 }
 
-// DeleteAll 删除所有记忆
+// DeleteAll deletes all memories.
 func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) error {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -256,7 +256,7 @@ func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) 
 	return nil
 }
 
-// Close 关闭数据库连接
+// Close closes the database connection.
 func (c *Client) Close() error {
 	if c.db != nil {
 		return c.db.Close()
@@ -264,7 +264,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// CreateIndex 创建向量索引
+// CreateIndex creates a vector index.
 func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexConfig) error {
 	var query string
 
@@ -305,7 +305,7 @@ func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexCon
 	return nil
 }
 
-// scanMemory 扫描单条记忆
+// scanMemory scans a single memory.
 func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	var memory storage.Memory
 	var embeddingStr string
@@ -328,7 +328,7 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 		return nil, err
 	}
 
-	// 解析 embedding
+	// Parse embedding
 	if embeddingStr != "" {
 		embedding, err := stringToVector(embeddingStr)
 		if err != nil {
@@ -337,14 +337,14 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 		memory.Embedding = embedding
 	}
 
-	// 解析 metadata
+	// Parse metadata
 	if len(metadataJSON) > 0 {
 		if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 			return nil, err
 		}
 	}
 
-	// 处理 last_accessed_at
+	// Handle last_accessed_at
 	if lastAccessedAt.Valid {
 		memory.LastAccessedAt = &lastAccessedAt.Time
 	}
@@ -352,7 +352,7 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	return &memory, nil
 }
 
-// scanMemories 扫描多条记忆
+// scanMemories scans multiple memories.
 func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory, error) {
 	var memories []*storage.Memory
 
@@ -380,7 +380,7 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			if err != nil {
 				return nil, err
 			}
-			// 将距离转换为相似度分数（1 - distance）
+			// Convert distance to similarity score (1 - distance)
 			memory.Score = 1.0 - distance
 		} else {
 			err := rows.Scan(
@@ -400,7 +400,7 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			}
 		}
 
-		// 解析 embedding
+		// Parse embedding
 		if embeddingStr != "" {
 			embedding, err := stringToVector(embeddingStr)
 			if err != nil {
@@ -409,14 +409,14 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			memory.Embedding = embedding
 		}
 
-		// 解析 metadata
+		// Parse metadata
 		if len(metadataJSON) > 0 {
 			if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 				return nil, err
 			}
 		}
 
-		// 处理 last_accessed_at
+		// Handle last_accessed_at
 		if lastAccessedAt.Valid {
 			memory.LastAccessedAt = &lastAccessedAt.Time
 		}

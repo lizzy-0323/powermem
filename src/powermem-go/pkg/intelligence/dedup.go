@@ -1,3 +1,5 @@
+// Package intelligence provides intelligent memory management features including
+// deduplication, Ebbinghaus forgetting curve, and importance evaluation.
 package intelligence
 
 import (
@@ -7,16 +9,38 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/storage"
 )
 
-// DedupManager 去重管理器
+// DedupManager manages memory deduplication by detecting and merging similar memories.
+//
+// It uses vector similarity search to find duplicate or highly similar memories,
+// then merges them to avoid storing redundant information.
+//
+// Example usage:
+//
+//	manager := NewDedupManager(store, 0.95)
+//	isDup, existingID, err := manager.CheckDuplicate(ctx, embedding, "user_001", "agent_001")
+//	if isDup {
+//	    merged, err := manager.MergeMemories(ctx, existingID, newContent, newEmbedding)
+//	}
 type DedupManager struct {
-	store     storage.VectorStore
-	threshold float64 // 相似度阈值
+	// store is the vector store for similarity search.
+	store storage.VectorStore
+
+	// threshold is the similarity threshold for duplicate detection.
+	// Memories with similarity >= threshold are considered duplicates.
+	// Typical range: 0.9-0.98 (higher = stricter, fewer duplicates detected)
+	threshold float64
 }
 
-// NewDedupManager 创建去重管理器
+// NewDedupManager creates a new deduplication manager.
+//
+// Parameters:
+//   - store: Vector store for similarity search
+//   - threshold: Similarity threshold (0.0-1.0). If 0, defaults to 0.95.
+//
+// Returns a new DedupManager with the specified threshold.
 func NewDedupManager(store storage.VectorStore, threshold float64) *DedupManager {
 	if threshold == 0 {
-		threshold = 0.95 // 默认阈值
+		threshold = 0.95 // Default threshold
 	}
 	return &DedupManager{
 		store:     store,
@@ -24,14 +48,29 @@ func NewDedupManager(store storage.VectorStore, threshold float64) *DedupManager
 	}
 }
 
-// CheckDuplicate 检查是否存在重复记忆
-// 返回: (是否重复, 重复的记忆ID, 错误)
+// CheckDuplicate checks if a memory is a duplicate of an existing memory.
+//
+// The method:
+//   1. Searches for similar memories using vector similarity
+//   2. Compares similarity scores against the threshold
+//   3. Returns the first memory that exceeds the threshold
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - embedding: Embedding vector of the new memory
+//   - userID: User identifier for filtering
+//   - agentID: Agent identifier for filtering
+//
+// Returns:
+//   - isDuplicate: True if a duplicate is found
+//   - existingID: ID of the duplicate memory (if found)
+//   - error: Error if search fails
 func (m *DedupManager) CheckDuplicate(ctx context.Context, embedding []float64, userID, agentID string) (bool, int64, error) {
-	// 搜索相似记忆
+	// Search for similar memories
 	opts := &storage.SearchOptions{
 		UserID:  userID,
 		AgentID: agentID,
-		Limit:   5, // 只查找前5个最相似的
+		Limit:   5, // Only check top 5 most similar
 	}
 
 	memories, err := m.store.Search(ctx, embedding, opts)
@@ -39,7 +78,7 @@ func (m *DedupManager) CheckDuplicate(ctx context.Context, embedding []float64, 
 		return false, 0, err
 	}
 
-	// 检查是否有相似度超过阈值的记忆
+	// Check if any memory exceeds the similarity threshold
 	for _, mem := range memories {
 		if mem.Score >= m.threshold {
 			return true, mem.ID, nil
@@ -49,28 +88,45 @@ func (m *DedupManager) CheckDuplicate(ctx context.Context, embedding []float64, 
 	return false, 0, nil
 }
 
-// MergeMemories 合并两条记忆
+// MergeMemories merges a new memory with an existing memory.
+//
+// The merge strategy:
+//   1. Combines content by appending new content to existing content
+//   2. Averages the embedding vectors
+//   3. Normalizes the resulting embedding
+//   4. Updates the existing memory with merged data
+//
+// Note: More sophisticated merge strategies (e.g., using LLM) can be implemented
+// by extending this method.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - existingID: ID of the existing memory to merge with
+//   - newContent: Content of the new memory
+//   - newEmbedding: Embedding vector of the new memory
+//
+// Returns the merged memory, or an error if merge fails.
 func (m *DedupManager) MergeMemories(ctx context.Context, existingID int64, newContent string, newEmbedding []float64) (*Memory, error) {
-	// 获取现有记忆
+	// Get existing memory
 	existing, err := m.store.Get(ctx, existingID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 简单合并策略：将新内容附加到现有内容
-	// 更复杂的策略可以使用 LLM 来智能合并
+	// Simple merge strategy: append new content to existing content
+	// More sophisticated strategies can use LLM for intelligent merging
 	mergedContent := existing.Content + " " + newContent
 
-	// 计算新的 embedding（取平均）
+	// Calculate new embedding (average of both embeddings)
 	mergedEmbedding := averageEmbeddings(existing.Embedding, newEmbedding)
 
-	// 更新记忆
+	// Update memory
 	updated, err := m.store.Update(ctx, existingID, mergedContent, mergedEmbedding)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换类型
+	// Convert to intelligence.Memory type
 	return &Memory{
 		ID:                updated.ID,
 		UserID:            updated.UserID,
@@ -86,10 +142,19 @@ func (m *DedupManager) MergeMemories(ctx context.Context, existingID int64, newC
 	}, nil
 }
 
-// averageEmbeddings 计算两个向量的平均值
+// averageEmbeddings calculates the average of two embedding vectors.
+//
+// If the vectors have different dimensions, returns the first vector unchanged.
+// The result is normalized to unit length.
+//
+// Parameters:
+//   - e1: First embedding vector
+//   - e2: Second embedding vector
+//
+// Returns the normalized average of the two vectors.
 func averageEmbeddings(e1, e2 []float64) []float64 {
 	if len(e1) != len(e2) {
-		return e1 // 如果维度不匹配，返回第一个
+		return e1 // Return first if dimensions don't match
 	}
 
 	result := make([]float64, len(e1))
@@ -97,11 +162,18 @@ func averageEmbeddings(e1, e2 []float64) []float64 {
 		result[i] = (e1[i] + e2[i]) / 2.0
 	}
 
-	// 归一化
+	// Normalize
 	return normalizeVector(result)
 }
 
-// normalizeVector 归一化向量
+// normalizeVector normalizes a vector to unit length (L2 norm).
+//
+// If the vector has zero norm, returns it unchanged.
+//
+// Parameters:
+//   - v: Vector to normalize
+//
+// Returns the normalized vector.
 func normalizeVector(v []float64) []float64 {
 	var sum float64
 	for _, val := range v {
@@ -121,7 +193,20 @@ func normalizeVector(v []float64) []float64 {
 	return result
 }
 
-// CosineSimilarity 计算余弦相似度
+// CosineSimilarity calculates the cosine similarity between two vectors.
+//
+// Cosine similarity measures the cosine of the angle between two vectors,
+// ranging from -1 (opposite) to 1 (identical). Values close to 1 indicate
+// high similarity.
+//
+// The formula is: similarity = (A · B) / (||A|| * ||B||)
+//
+// Parameters:
+//   - a: First vector
+//   - b: Second vector
+//
+// Returns cosine similarity between -1.0 and 1.0, or 0.0 if vectors have
+// different dimensions or zero norm.
 func CosineSimilarity(a, b []float64) float64 {
 	if len(a) != len(b) {
 		return 0

@@ -21,44 +21,107 @@ import (
 	sqliteStore "github.com/oceanbase/powermem-go/pkg/storage/sqlite"
 )
 
-// Client PowerMem 客户端
+// Client is the main PowerMem client for memory management.
+//
+// It provides a complete interface for storing, retrieving, and managing memories
+// with support for:
+//   - Vector similarity search
+//   - Intelligent deduplication
+//   - Ebbinghaus forgetting curve
+//   - Multi-agent support
+//   - Metadata filtering
+//
+// The client is thread-safe and can be used concurrently from multiple goroutines.
+//
+// Example usage:
+//
+//	config, _ := core.LoadConfigFromEnv()
+//	client, _ := core.NewClient(config)
+//	defer client.Close()
+//
+//	memory, _ := client.Add(ctx, "User likes Python",
+//	    core.WithUserID("user_001"),
+//	    core.WithInfer(true), // Enable intelligent deduplication
+//	)
 type Client struct {
-	config            *Config
-	storage           storage.VectorStore
-	llm               llm.Provider
-	embedder          embedder.Provider
-	dedupManager      *intelligence.DedupManager
+	// config contains the client configuration.
+	config *Config
+
+	// storage is the vector store for memory persistence.
+	storage storage.VectorStore
+
+	// llm is the LLM provider for intelligent features.
+	llm llm.Provider
+
+	// embedder is the embedding provider for vector generation.
+	embedder embedder.Provider
+
+	// dedupManager manages memory deduplication (nil if not enabled).
+	dedupManager *intelligence.DedupManager
+
+	// ebbinghausManager manages retention using Ebbinghaus curve (nil if not enabled).
 	ebbinghausManager *intelligence.EbbinghausManager
-	snowflakeNode     *snowflake.Node
-	mu                sync.RWMutex
+
+	// intelligentManager manages complete intelligent memory processing (nil if not enabled).
+	intelligentManager *intelligence.IntelligentMemoryManager
+
+	// snowflakeNode generates unique IDs for memories.
+	snowflakeNode *snowflake.Node
+
+	// mu protects concurrent access to the client.
+	mu sync.RWMutex
 }
 
-// NewClient 创建新的 PowerMem 客户端
+// NewClient creates a new PowerMem client.
+//
+// The client is initialized with:
+//   - Vector store (SQLite, OceanBase, or PostgreSQL)
+//   - LLM provider (OpenAI, Qwen, DeepSeek, Ollama, Anthropic)
+//   - Embedding provider (OpenAI, Qwen)
+//   - Intelligent features (if enabled in config)
+//
+// Parameters:
+//   - cfg: Configuration containing storage, LLM, and embedding settings
+//
+// Returns a new Client instance, or an error if initialization fails.
+//
+// Example:
+//
+//	config := &core.Config{
+//	    VectorStore: core.VectorStoreConfig{...},
+//	    LLM: core.LLMConfig{...},
+//	    Embedder: core.EmbedderConfig{...},
+//	    Intelligence: &core.IntelligenceConfig{
+//	        Enabled: true,
+//	        DecayRate: 0.1,
+//	    },
+//	}
+//	client, err := core.NewClient(config)
 func NewClient(cfg *Config) (*Client, error) {
-	// 验证配置
+	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	// 初始化存储
+	// Initialize storage
 	store, err := initStorage(cfg.VectorStore)
 	if err != nil {
 		return nil, err
 	}
 
-	// 初始化 LLM
+	// Initialize LLM
 	llmProvider, err := initLLM(cfg.LLM)
 	if err != nil {
 		return nil, err
 	}
 
-	// 初始化 Embedder
+	// Initialize Embedder
 	embedderProvider, err := initEmbedder(cfg.Embedder)
 	if err != nil {
 		return nil, err
 	}
 
-	// 初始化 Snowflake ID 生成器
+	// Initialize Snowflake ID generator
 	node, err := snowflake.NewNode(1)
 	if err != nil {
 		return nil, NewMemoryError("NewClient", err)
@@ -72,68 +135,153 @@ func NewClient(cfg *Config) (*Client, error) {
 		snowflakeNode: node,
 	}
 
-	// 初始化智能功能（如果启用）
+	// Initialize intelligent features (if enabled)
 	if cfg.Intelligence != nil && cfg.Intelligence.Enabled {
+		// Initialize deduplication manager
 		client.dedupManager = intelligence.NewDedupManager(
 			store,
 			cfg.Intelligence.DuplicateThreshold,
 		)
+
+		// Initialize Ebbinghaus manager
 		client.ebbinghausManager = intelligence.NewEbbinghausManager(
 			cfg.Intelligence.DecayRate,
 			cfg.Intelligence.ReinforcementFactor,
+		)
+
+		// Initialize intelligent memory manager (for full intelligent processing)
+		intelligenceConfig := &intelligence.Config{
+			DecayRate:           cfg.Intelligence.DecayRate,
+			ReinforcementFactor: cfg.Intelligence.ReinforcementFactor,
+			WorkingThreshold:    cfg.Intelligence.WorkingThreshold,
+			ShortTermThreshold:  cfg.Intelligence.ShortTermThreshold,
+			LongTermThreshold:   cfg.Intelligence.LongTermThreshold,
+			InitialRetention:    cfg.Intelligence.InitialRetention,
+			FallbackToSimpleAdd: cfg.Intelligence.FallbackToSimpleAdd,
+		}
+		// Set defaults if not specified
+		if intelligenceConfig.WorkingThreshold == 0 {
+			intelligenceConfig.WorkingThreshold = 0.3
+		}
+		if intelligenceConfig.ShortTermThreshold == 0 {
+			intelligenceConfig.ShortTermThreshold = 0.6
+		}
+		if intelligenceConfig.LongTermThreshold == 0 {
+			intelligenceConfig.LongTermThreshold = 0.8
+		}
+		if intelligenceConfig.InitialRetention == 0 {
+			intelligenceConfig.InitialRetention = 1.0
+		}
+
+		client.intelligentManager = intelligence.NewIntelligentMemoryManager(
+			llmProvider,
+			intelligenceConfig,
 		)
 	}
 
 	return client, nil
 }
 
-// Add 添加记忆
+// Add adds a new memory to the store.
+//
+// The method:
+//   1. Generates an embedding vector for the content
+//   2. Optionally checks for duplicates (if Infer option is enabled)
+//   3. Stores the memory with metadata
+//
+// If intelligent deduplication is enabled and a duplicate is found,
+// the memories are merged instead of creating a new one.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - content: Memory content (text string)
+//   - opts: Optional parameters (UserID, AgentID, Metadata, Infer, etc.)
+//
+// Returns the created or merged Memory, or an error if the operation fails.
+//
+// Example:
+//
+//	memory, err := client.Add(ctx, "User likes Python programming",
+//	    core.WithUserID("user_001"),
+//	    core.WithAgentID("agent_001"),
+//	    core.WithInfer(true), // Enable intelligent deduplication
+//	    core.WithMetadata(map[string]interface{}{
+//	        "source": "conversation",
+//	    }),
+//	)
 func (c *Client) Add(ctx context.Context, content string, opts ...AddOption) (*Memory, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// 应用选项
+	// Apply options
 	addOpts := applyAddOptions(opts)
 
-	// 检查 context
+	// Check context cancellation
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	// 1. 生成 embedding
+	// Generate embedding
 	embedding, err := c.embedder.Embed(ctx, content)
 	if err != nil {
 		return nil, NewMemoryError("Add", err)
 	}
 
-	// 2. 智能去重（如果启用）
+	// Intelligent deduplication (if enabled)
 	if addOpts.Infer && c.dedupManager != nil {
 		isDup, existingID, err := c.dedupManager.CheckDuplicate(ctx, embedding, addOpts.UserID, addOpts.AgentID)
 		if err != nil {
 			return nil, NewMemoryError("Add", err)
 		}
 		if isDup {
-			// 合并记忆
+			// Merge memories
 			merged, err := c.dedupManager.MergeMemories(ctx, existingID, content, embedding)
 			if err != nil {
 				return nil, NewMemoryError("Add", err)
 			}
-			// 转换回powermem.Memory类型
+			// Convert back to core.Memory type
 			return fromIntelligenceMemory(merged), nil
 		}
 	}
 
-	// 3. 插入存储
+	// Build metadata, merge all additional parameters
+	metadata := make(map[string]interface{})
+	if addOpts.Metadata != nil {
+		for k, v := range addOpts.Metadata {
+			metadata[k] = v
+		}
+	}
+	// Add extra parameters to metadata (if provided)
+	if addOpts.RunID != "" {
+		metadata["run_id"] = addOpts.RunID
+	}
+	if addOpts.MemoryType != "" {
+		metadata["memory_type"] = addOpts.MemoryType
+	}
+	if addOpts.Scope != "" {
+		metadata["scope"] = string(addOpts.Scope)
+	}
+	if addOpts.Prompt != "" {
+		metadata["prompt"] = addOpts.Prompt
+	}
+	// Merge filters into metadata
+	if addOpts.Filters != nil {
+		for k, v := range addOpts.Filters {
+			metadata[k] = v
+		}
+	}
+
+	// Insert into storage
 	memory := &Memory{
 		ID:                c.snowflakeNode.Generate().Int64(),
 		UserID:            addOpts.UserID,
 		AgentID:           addOpts.AgentID,
 		Content:           content,
 		Embedding:         embedding,
-		Metadata:          addOpts.Metadata,
-		RetentionStrength: 1.0, // 初始强度为 1.0
+		Metadata:          metadata,
+		RetentionStrength: 1.0, // Initial strength: 1.0
 	}
 
 	if err := c.storage.Insert(ctx, toStorageMemory(memory)); err != nil {
@@ -143,21 +291,43 @@ func (c *Client) Add(ctx context.Context, content string, opts ...AddOption) (*M
 	return memory, nil
 }
 
-// Search 搜索记忆
+// Search searches for memories using vector similarity.
+//
+// The method:
+//   1. Generates an embedding vector for the query
+//   2. Performs vector similarity search in the store
+//   3. Returns results sorted by similarity score
+//
+// Results can be filtered by UserID, AgentID, and custom metadata filters.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - query: Search query (text string)
+//   - opts: Optional parameters (UserID, AgentID, Limit, MinScore, Filters)
+//
+// Returns a list of memories sorted by relevance (highest first), or an error.
+//
+// Example:
+//
+//	results, err := client.Search(ctx, "Python programming",
+//	    core.WithUserIDForSearch("user_001"),
+//	    core.WithLimit(10),
+//	    core.WithMinScore(0.7),
+//	)
 func (c *Client) Search(ctx context.Context, query string, opts ...SearchOption) ([]*Memory, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// 应用选项
+	// Apply search options
 	searchOpts := applySearchOptions(opts)
 
-	// 1. 生成查询 embedding
+	// Generate query embedding
 	queryEmbedding, err := c.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, NewMemoryError("Search", err)
 	}
 
-	// 2. 执行向量搜索
+	// Execute vector similarity search
 	storageOpts := &storage.SearchOptions{
 		UserID:   searchOpts.UserID,
 		AgentID:  searchOpts.AgentID,
@@ -174,7 +344,13 @@ func (c *Client) Search(ctx context.Context, query string, opts ...SearchOption)
 	return fromStorageMemories(memories), nil
 }
 
-// Get 根据 ID 获取记忆
+// Get retrieves a memory by its ID.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - id: Memory ID
+//
+// Returns the Memory if found, or an error if not found or retrieval fails.
 func (c *Client) Get(ctx context.Context, id int64) (*Memory, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -187,18 +363,29 @@ func (c *Client) Get(ctx context.Context, id int64) (*Memory, error) {
 	return fromStorageMemory(memory), nil
 }
 
-// Update 更新记忆
+// Update updates an existing memory's content.
+//
+// The method:
+//   1. Generates a new embedding vector for the updated content
+//   2. Updates the memory in the store
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - id: Memory ID to update
+//   - content: New content for the memory
+//
+// Returns the updated Memory, or an error if update fails.
 func (c *Client) Update(ctx context.Context, id int64, content string) (*Memory, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// 生成新的 embedding
+	// Generate new embedding
 	embedding, err := c.embedder.Embed(ctx, content)
 	if err != nil {
 		return nil, NewMemoryError("Update", err)
 	}
 
-	// 更新存储
+	// Update storage
 	memory, err := c.storage.Update(ctx, id, content, embedding)
 	if err != nil {
 		return nil, NewMemoryError("Update", err)
@@ -207,7 +394,13 @@ func (c *Client) Update(ctx context.Context, id int64, content string) (*Memory,
 	return fromStorageMemory(memory), nil
 }
 
-// Delete 删除记忆
+// Delete deletes a memory by its ID.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - id: Memory ID to delete
+//
+// Returns an error if deletion fails.
 func (c *Client) Delete(ctx context.Context, id int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -219,7 +412,23 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetAll 获取所有记忆
+// GetAll retrieves all memories with optional filtering.
+//
+// Results can be filtered by UserID, AgentID, and paginated using Limit and Offset.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - opts: Optional parameters (UserID, AgentID, Limit, Offset)
+//
+// Returns a list of memories, or an error if retrieval fails.
+//
+// Example:
+//
+//	memories, err := client.GetAll(ctx,
+//	    core.WithUserIDForGetAll("user_001"),
+//	    core.WithLimitForGetAll(100),
+//	    core.WithOffset(0),
+//	)
 func (c *Client) GetAll(ctx context.Context, opts ...GetAllOption) ([]*Memory, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -241,7 +450,22 @@ func (c *Client) GetAll(ctx context.Context, opts ...GetAllOption) ([]*Memory, e
 	return fromStorageMemories(memories), nil
 }
 
-// DeleteAll 删除所有记忆
+// DeleteAll deletes all memories matching the given filters.
+//
+// If no filters are provided, deletes ALL memories (use with caution).
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - opts: Optional parameters (UserID, AgentID)
+//
+// Returns an error if deletion fails.
+//
+// Example:
+//
+//	err := client.DeleteAll(ctx,
+//	    core.WithUserIDForDeleteAll("user_001"),
+//	    core.WithAgentIDForDeleteAll("agent_001"),
+//	)
 func (c *Client) DeleteAll(ctx context.Context, opts ...DeleteAllOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -260,7 +484,19 @@ func (c *Client) DeleteAll(ctx context.Context, opts ...DeleteAllOption) error {
 	return nil
 }
 
-// Close 关闭客户端
+// Close closes the client and releases all resources.
+//
+// This method:
+//   - Closes the vector store connection
+//   - Closes the LLM provider
+//   - Closes the embedder provider
+//
+// Returns the first error encountered during cleanup, or nil if all resources
+// were closed successfully.
+//
+// Example:
+//
+//	defer client.Close()
 func (c *Client) Close() error {
 	var errs []error
 
@@ -283,13 +519,13 @@ func (c *Client) Close() error {
 	}
 
 	if len(errs) > 0 {
-		return errs[0] // 返回第一个错误
+		return errs[0] // Return the first error
 	}
 
 	return nil
 }
 
-// initStorage 初始化存储
+// initStorage initializes the storage backend.
 func initStorage(cfg VectorStoreConfig) (storage.VectorStore, error) {
 	switch cfg.Provider {
 	case "oceanbase":
@@ -328,7 +564,7 @@ func initStorage(cfg VectorStoreConfig) (storage.VectorStore, error) {
 	}
 }
 
-// initLLM 初始化 LLM
+// initLLM initializes the LLM provider.
 func initLLM(cfg LLMConfig) (llm.Provider, error) {
 	switch cfg.Provider {
 	case "openai":
@@ -366,7 +602,7 @@ func initLLM(cfg LLMConfig) (llm.Provider, error) {
 	}
 }
 
-// initEmbedder 初始化 Embedder
+// initEmbedder initializes the embedder provider.
 func initEmbedder(cfg EmbedderConfig) (embedder.Provider, error) {
 	switch cfg.Provider {
 	case "openai":

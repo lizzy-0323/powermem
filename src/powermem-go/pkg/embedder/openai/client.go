@@ -8,19 +8,19 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-// Client OpenAI Embedder 客户端
-// 实现了 embedder.Provider 接口，提供基于 OpenAI Embeddings API 的文本向量化功能
+// Client is an OpenAI Embedder client.
+// It implements the embedder.Provider interface and provides text vectorization functionality based on the OpenAI Embeddings API.
 type Client struct {
 	client     *openai.Client
 	model      openai.EmbeddingModel
 	dimensions int
 }
 
-// Config OpenAI Embedder 配置
-// APIKey: OpenAI API 密钥（必需）
-// Model: 使用的模型名称，当前固定使用 AdaEmbeddingV2
-// BaseURL: API 基础 URL，默认为 OpenAI 官方地址
-// Dimensions: 向量维度，默认为 1536（AdaEmbeddingV2 的默认维度）
+// Config is the configuration for OpenAI Embedder.
+// APIKey: OpenAI API key (required)
+// Model: Model name to use, currently fixed to AdaEmbeddingV2
+// BaseURL: API base URL, defaults to OpenAI official address
+// Dimensions: Vector dimensions, defaults to 1536 (default dimension for AdaEmbeddingV2)
 type Config struct {
 	APIKey     string
 	Model      string
@@ -28,12 +28,14 @@ type Config struct {
 	Dimensions int
 }
 
-// NewClient 创建新的 OpenAI Embedder 客户端
-// 参数:
-//   - cfg: OpenAI Embedder 配置，包含 APIKey、BaseURL、Dimensions 等
-// 返回:
-//   - *Client: OpenAI Embedder 客户端实例
-//   - error: 如果配置无效或初始化失败则返回错误
+// NewClient creates a new OpenAI Embedder client.
+//
+// Args:
+//   - cfg: OpenAI Embedder configuration containing APIKey, BaseURL, Dimensions, etc.
+//
+// Returns:
+//   - *Client: OpenAI Embedder client instance
+//   - error: Returns an error if the configuration is invalid or initialization fails
 func NewClient(cfg *Config) (*Client, error) {
 	config := openai.DefaultConfig(cfg.APIKey)
 	if cfg.BaseURL != "" {
@@ -42,12 +44,12 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	client := openai.NewClientWithConfig(config)
 
-	// 默认使用 Ada v2 模型
+	// Default to Ada v2 model
 	model := openai.AdaEmbeddingV2
 
 	dimensions := cfg.Dimensions
 	if dimensions == 0 {
-		dimensions = 1536 // AdaEmbeddingV2 的默认维度
+		dimensions = 1536 // Default dimension for AdaEmbeddingV2
 	}
 
 	return &Client{
@@ -57,13 +59,15 @@ func NewClient(cfg *Config) (*Client, error) {
 	}, nil
 }
 
-// Embed 将单个文本转换为向量
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - text: 要向量化的文本内容
-// 返回:
-//   - []float64: 文本的向量表示（维度由配置决定）
-//   - error: 如果向量化失败则返回错误
+// Embed converts a single text to a vector.
+//
+// Args:
+//   - ctx: Context for controlling the request lifecycle
+//   - text: Text content to vectorize
+//
+// Returns:
+//   - []float64: Vector representation of the text (dimension determined by configuration)
+//   - error: Returns an error if vectorization fails
 func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 	resp, err := c.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{text},
@@ -77,7 +81,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 		return nil, errors.New("embedding generation failed: no data returned from OpenAI API")
 	}
 
-	// 转换 float32 到 float64
+	// Convert float32 to float64
 	embedding32 := resp.Data[0].Embedding
 	embedding64 := make([]float64, len(embedding32))
 	for i, v := range embedding32 {
@@ -87,13 +91,15 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 	return embedding64, nil
 }
 
-// EmbedBatch 批量将多个文本转换为向量
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - texts: 要向量化的文本列表
-// 返回:
-//   - [][]float64: 每个文本对应的向量表示（顺序与输入文本一致）
-//   - error: 如果向量化失败或返回结果数量不匹配则返回错误
+// EmbedBatch converts multiple texts to vectors in batch.
+//
+// Args:
+//   - ctx: Context for controlling the request lifecycle
+//   - texts: List of texts to vectorize
+//
+// Returns:
+//   - [][]float64: Vector representation for each text (order matches input texts)
+//   - error: Returns an error if vectorization fails or the number of returned results doesn't match
 func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, error) {
 	resp, err := c.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: texts,
@@ -120,17 +126,19 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, e
 	return embeddings, nil
 }
 
-// Dimensions 返回向量维度
-// 返回:
-//   - int: 向量维度数
+// Dimensions returns the vector dimensions.
+//
+// Returns:
+//   - int: Number of vector dimensions
 func (c *Client) Dimensions() int {
 	return c.dimensions
 }
 
-// Close 关闭客户端连接
-// OpenAI SDK 的客户端不需要显式关闭，此方法为接口兼容性保留
-// 返回:
-//   - error: 始终返回 nil
+// Close closes the client connection.
+// The OpenAI SDK client does not require explicit closing; this method is retained for interface compatibility.
+//
+// Returns:
+//   - error: Always returns nil
 func (c *Client) Close() error {
 	return nil
 }

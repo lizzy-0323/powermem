@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// vectorToString 将 float64 切片转换为 OceanBase VECTOR 格式的字符串
-// 例如: [0.1, 0.2, 0.3] -> "[0.1,0.2,0.3]"
+// vectorToString converts a float64 slice to an OceanBase VECTOR format string.
+// Example: [0.1, 0.2, 0.3] -> "[0.1,0.2,0.3]"
 func vectorToString(vector []float64) string {
 	if len(vector) == 0 {
 		return "[]"
@@ -20,10 +20,10 @@ func vectorToString(vector []float64) string {
 	return "[" + strings.Join(parts, ",") + "]"
 }
 
-// stringToVector 将字符串转换为 float64 切片
-// 例如: "[0.1,0.2,0.3]" -> [0.1, 0.2, 0.3]
+// stringToVector converts a string to a float64 slice.
+// Example: "[0.1,0.2,0.3]" -> [0.1, 0.2, 0.3]
 func stringToVector(s string) ([]float64, error) {
-	// 移除首尾的方括号
+	// Remove leading and trailing square brackets
 	s = strings.Trim(s, "[]")
 	if s == "" {
 		return []float64{}, nil
@@ -44,7 +44,7 @@ func stringToVector(s string) ([]float64, error) {
 	return result, nil
 }
 
-// buildWhereClause 构建 WHERE 子句
+// buildWhereClause builds a WHERE clause.
 func buildWhereClause(userID, agentID string, filters map[string]interface{}) (string, []interface{}) {
 	conditions := []string{}
 	args := []interface{}{}
@@ -59,7 +59,7 @@ func buildWhereClause(userID, agentID string, filters map[string]interface{}) (s
 		args = append(args, agentID)
 	}
 
-	// 处理额外的过滤条件
+	// Handle additional filter conditions
 	for key, value := range filters {
 		conditions = append(conditions, fmt.Sprintf("metadata->>'$.%s' = ?", key))
 		args = append(args, value)

@@ -1,175 +1,383 @@
+// Package core provides the main PowerMem client and memory management functionality.
 package core
 
-// AddOption Add 操作的选项
+// AddOption is a function type for configuring Add operations.
+//
+// Options are applied using the functional options pattern, allowing
+// flexible configuration without requiring all parameters.
 type AddOption func(*AddOptions)
 
-// AddOptions Add 操作的配置
+// AddOptions contains configuration options for Add operations.
 type AddOptions struct {
-	UserID   string
-	AgentID  string
+	// UserID identifies the user who owns this memory.
+	UserID string
+
+	// AgentID identifies the agent associated with this memory.
+	AgentID string
+
+	// RunID identifies the run/session associated with this memory.
+	RunID string
+
+	// Metadata contains additional metadata about the memory.
 	Metadata map[string]interface{}
-	Infer    bool // 是否启用智能去重
-	Scope    MemoryScope
+
+	// Filters provides additional metadata filters for the memory.
+	Filters map[string]interface{}
+
+	// Scope defines the visibility scope of the memory.
+	// See MemoryScope constants for available scopes.
+	Scope MemoryScope
+
+	// MemoryType specifies the type of memory (e.g., "conversation", "fact", "preference").
+	MemoryType string
+
+	// Prompt is an optional prompt used for memory processing.
+	Prompt string
+
+	// Infer enables intelligent deduplication.
+	// When true, the system checks for duplicate memories and merges them.
+	Infer bool
 }
 
-// WithUserID 设置用户 ID（Add 操作）
+// WithUserID sets the user ID for Add operations.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithUserID("user_001"))
 func WithUserID(userID string) AddOption {
 	return func(opts *AddOptions) {
 		opts.UserID = userID
 	}
 }
 
-// WithUserIDForSearch 设置用户 ID（Search 操作）
+// WithUserIDForSearch sets the user ID for Search operations.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query", core.WithUserIDForSearch("user_001"))
 func WithUserIDForSearch(userID string) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.UserID = userID
 	}
 }
 
-// WithUserIDForGetAll 设置用户 ID（GetAll 操作）
+// WithUserIDForGetAll sets the user ID for GetAll operations.
+//
+// Example:
+//
+//	memories, _ := client.GetAll(ctx, core.WithUserIDForGetAll("user_001"))
 func WithUserIDForGetAll(userID string) GetAllOption {
 	return func(opts *GetAllOptions) {
 		opts.UserID = userID
 	}
 }
 
-// WithUserIDForDeleteAll 设置用户 ID（DeleteAll 操作）
+// WithUserIDForDeleteAll sets the user ID for DeleteAll operations.
+//
+// Example:
+//
+//	_ = client.DeleteAll(ctx, core.WithUserIDForDeleteAll("user_001"))
 func WithUserIDForDeleteAll(userID string) DeleteAllOption {
 	return func(opts *DeleteAllOptions) {
 		opts.UserID = userID
 	}
 }
 
-// WithAgentID 设置代理 ID（Add 操作）
+// WithAgentID sets the agent ID for Add operations.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithAgentID("agent_001"))
 func WithAgentID(agentID string) AddOption {
 	return func(opts *AddOptions) {
 		opts.AgentID = agentID
 	}
 }
 
-// WithAgentIDForSearch 设置代理 ID（Search 操作）
+// WithAgentIDForSearch sets the agent ID for Search operations.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query", core.WithAgentIDForSearch("agent_001"))
 func WithAgentIDForSearch(agentID string) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.AgentID = agentID
 	}
 }
 
-// WithAgentIDForGetAll 设置代理 ID（GetAll 操作）
+// WithAgentIDForGetAll sets the agent ID for GetAll operations.
+//
+// Example:
+//
+//	memories, _ := client.GetAll(ctx, core.WithAgentIDForGetAll("agent_001"))
 func WithAgentIDForGetAll(agentID string) GetAllOption {
 	return func(opts *GetAllOptions) {
 		opts.AgentID = agentID
 	}
 }
 
-// WithAgentIDForDeleteAll 设置代理 ID（DeleteAll 操作）
+// WithAgentIDForDeleteAll sets the agent ID for DeleteAll operations.
+//
+// Example:
+//
+//	_ = client.DeleteAll(ctx, core.WithAgentIDForDeleteAll("agent_001"))
 func WithAgentIDForDeleteAll(agentID string) DeleteAllOption {
 	return func(opts *DeleteAllOptions) {
 		opts.AgentID = agentID
 	}
 }
 
-// WithMetadata 设置元数据
+// WithMetadata sets metadata for Add operations.
+//
+// Metadata can be used for filtering and additional context.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content",
+//	    core.WithMetadata(map[string]interface{}{
+//	        "source": "conversation",
+//	        "priority": "high",
+//	    }),
+//	)
 func WithMetadata(metadata map[string]interface{}) AddOption {
 	return func(opts *AddOptions) {
 		opts.Metadata = metadata
 	}
 }
 
-// WithInfer 启用/禁用智能去重
+// WithRunID sets the run ID for Add operations.
+//
+// RunID identifies a specific run or session, useful for grouping related memories.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithRunID("run_001"))
+func WithRunID(runID string) AddOption {
+	return func(opts *AddOptions) {
+		opts.RunID = runID
+	}
+}
+
+// WithFiltersForAdd sets metadata filters for Add operations.
+//
+// Filters can be used for additional filtering and categorization.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content",
+//	    core.WithFiltersForAdd(map[string]interface{}{
+//	        "category": "conversation",
+//	        "priority": "high",
+//	    }),
+//	)
+func WithFiltersForAdd(filters map[string]interface{}) AddOption {
+	return func(opts *AddOptions) {
+		opts.Filters = filters
+	}
+}
+
+// WithMemoryType sets the memory type for Add operations.
+//
+// MemoryType categorizes the type of memory (e.g., "conversation", "fact", "preference").
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithMemoryType("conversation"))
+func WithMemoryType(memoryType string) AddOption {
+	return func(opts *AddOptions) {
+		opts.MemoryType = memoryType
+	}
+}
+
+// WithPrompt sets an optional prompt for Add operations.
+//
+// Prompt can be used to guide memory processing or extraction.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithPrompt("Extract key facts"))
+func WithPrompt(prompt string) AddOption {
+	return func(opts *AddOptions) {
+		opts.Prompt = prompt
+	}
+}
+
+// WithInfer enables or disables intelligent deduplication for Add operations.
+//
+// When enabled, the system automatically detects and merges duplicate memories
+// based on vector similarity.
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithInfer(true))
 func WithInfer(infer bool) AddOption {
 	return func(opts *AddOptions) {
 		opts.Infer = infer
 	}
 }
 
-// WithScope 设置记忆作用域
+// WithScope sets the memory scope for Add operations.
+//
+// Scope determines visibility:
+//   - ScopePrivate: Only visible to the creating agent
+//   - ScopeAgentGroup: Visible to all agents in the group
+//   - ScopeGlobal: Visible to all agents
+//
+// Example:
+//
+//	memory, _ := client.Add(ctx, "content", core.WithScope(core.ScopeGlobal))
 func WithScope(scope MemoryScope) AddOption {
 	return func(opts *AddOptions) {
 		opts.Scope = scope
 	}
 }
 
-// SearchOption Search 操作的选项
+// SearchOption is a function type for configuring Search operations.
 type SearchOption func(*SearchOptions)
 
-// SearchOptions Search 操作的配置
+// SearchOptions contains configuration options for Search operations.
 type SearchOptions struct {
-	UserID          string
-	AgentID         string
-	Limit           int
-	Filters         map[string]interface{}
-	MinScore        float64
+	// UserID filters results to a specific user.
+	UserID string
+
+	// AgentID filters results to a specific agent.
+	AgentID string
+
+	// Limit sets the maximum number of results to return.
+	// Default: 10
+	Limit int
+
+	// Filters provides additional metadata filters.
+	Filters map[string]interface{}
+
+	// MinScore sets the minimum similarity score for results.
+	// Results with scores below this threshold are excluded.
+	// Default: 0.0 (no minimum)
+	MinScore float64
+
+	// IncludeArchived indicates whether to include archived memories.
 	IncludeArchived bool
 }
 
-// WithLimit 设置返回结果数量限制（Search 操作）
+// WithLimit sets the maximum number of results for Search operations.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query", core.WithLimit(20))
 func WithLimit(limit int) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.Limit = limit
 	}
 }
 
-// WithLimitForGetAll 设置返回结果数量限制（GetAll 操作）
+// WithLimitForGetAll sets the maximum number of results for GetAll operations.
+//
+// Example:
+//
+//	memories, _ := client.GetAll(ctx, core.WithLimitForGetAll(100))
 func WithLimitForGetAll(limit int) GetAllOption {
 	return func(opts *GetAllOptions) {
 		opts.Limit = limit
 	}
 }
 
-// WithFilters 设置过滤条件
+// WithFilters sets metadata filters for Search operations.
+//
+// Filters allow searching by custom metadata fields.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query",
+//	    core.WithFilters(map[string]interface{}{
+//	        "type": "conversation",
+//	        "priority": "high",
+//	    }),
+//	)
 func WithFilters(filters map[string]interface{}) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.Filters = filters
 	}
 }
 
-// WithMinScore 设置最小相似度分数
+// WithMinScore sets the minimum similarity score for Search results.
+//
+// Only results with similarity scores >= minScore are returned.
+// Typical range: 0.0-1.0, where 1.0 is identical.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query", core.WithMinScore(0.7))
 func WithMinScore(score float64) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.MinScore = score
 	}
 }
 
-// WithIncludeArchived 是否包含已归档的记忆
+// WithIncludeArchived sets whether to include archived memories in Search results.
+//
+// Example:
+//
+//	results, _ := client.Search(ctx, "query", core.WithIncludeArchived(true))
 func WithIncludeArchived(include bool) SearchOption {
 	return func(opts *SearchOptions) {
 		opts.IncludeArchived = include
 	}
 }
 
-// GetAllOption GetAll 操作的选项
+// GetAllOption is a function type for configuring GetAll operations.
 type GetAllOption func(*GetAllOptions)
 
-// GetAllOptions GetAll 操作的配置
+// GetAllOptions contains configuration options for GetAll operations.
 type GetAllOptions struct {
-	UserID  string
+	// UserID filters results to a specific user.
+	UserID string
+
+	// AgentID filters results to a specific agent.
 	AgentID string
-	Limit   int
-	Offset  int
+
+	// Limit sets the maximum number of results to return.
+	// Default: 100
+	Limit int
+
+	// Offset sets the number of results to skip (for pagination).
+	// Default: 0
+	Offset int
 }
 
-// WithOffset 设置偏移量
+// WithOffset sets the offset for GetAll operations (for pagination).
+//
+// Example:
+//
+//	// Get second page of results
+//	memories, _ := client.GetAll(ctx,
+//	    core.WithLimitForGetAll(50),
+//	    core.WithOffset(50),
+//	)
 func WithOffset(offset int) GetAllOption {
 	return func(opts *GetAllOptions) {
 		opts.Offset = offset
 	}
 }
 
-// DeleteAllOption DeleteAll 操作的选项
+// DeleteAllOption is a function type for configuring DeleteAll operations.
 type DeleteAllOption func(*DeleteAllOptions)
 
-// DeleteAllOptions DeleteAll 操作的配置
+// DeleteAllOptions contains configuration options for DeleteAll operations.
 type DeleteAllOptions struct {
-	UserID  string
+	// UserID filters deletions to a specific user.
+	UserID string
+
+	// AgentID filters deletions to a specific agent.
 	AgentID string
 }
 
-// applyAddOptions 应用 Add 选项
+// applyAddOptions applies Add options to create AddOptions.
 func applyAddOptions(opts []AddOption) *AddOptions {
 	options := &AddOptions{
 		Infer:    false,
 		Scope:    ScopePrivate,
 		Metadata: make(map[string]interface{}),
+		Filters:  make(map[string]interface{}),
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -177,7 +385,7 @@ func applyAddOptions(opts []AddOption) *AddOptions {
 	return options
 }
 
-// applySearchOptions 应用 Search 选项
+// applySearchOptions applies Search options to create SearchOptions.
 func applySearchOptions(opts []SearchOption) *SearchOptions {
 	options := &SearchOptions{
 		Limit:    10,
@@ -189,7 +397,7 @@ func applySearchOptions(opts []SearchOption) *SearchOptions {
 	return options
 }
 
-// applyGetAllOptions 应用 GetAll 选项
+// applyGetAllOptions applies GetAll options to create GetAllOptions.
 func applyGetAllOptions(opts []GetAllOption) *GetAllOptions {
 	options := &GetAllOptions{
 		Limit:  100,
@@ -201,7 +409,7 @@ func applyGetAllOptions(opts []GetAllOption) *GetAllOptions {
 	return options
 }
 
-// applyDeleteAllOptions 应用 DeleteAll 选项
+// applyDeleteAllOptions applies DeleteAll options to create DeleteAllOptions.
 func applyDeleteAllOptions(opts []DeleteAllOption) *DeleteAllOptions {
 	options := &DeleteAllOptions{}
 	for _, opt := range opts {

@@ -1,3 +1,7 @@
+// Package qwen provides Qwen Embedder implementation using Alibaba Cloud DashScope Text Embedding API.
+//
+// Qwen Embedder converts text into vector embeddings for similarity search.
+// This package implements the embedder.Provider interface.
 package qwen
 
 import (
@@ -11,36 +15,52 @@ import (
 	"time"
 )
 
-// Client Qwen Embedder 客户端
-// 实现了 embedder.Provider 接口，提供基于阿里云 DashScope Text Embedding API 的文本向量化功能
+// Client implements embedder.Provider using Alibaba Cloud DashScope Text Embedding API.
+//
+// It provides text-to-vector conversion capabilities using Qwen embedding models.
 type Client struct {
-	client     *http.Client
-	apiKey     string
-	model      string
-	baseURL    string
+	// client is the HTTP client for API requests.
+	client *http.Client
+
+	// apiKey is the DashScope API key.
+	apiKey string
+
+	// model is the Qwen embedding model name to use.
+	model string
+
+	// baseURL is the base URL for DashScope API.
+	baseURL string
+
+	// dimensions is the dimension of embedding vectors.
 	dimensions int
 }
 
-// Config Qwen Embedder 配置
-// APIKey: DashScope API 密钥（必需）
-// Model: 使用的模型名称，默认为 "text-embedding-v4"
-// BaseURL: API 基础 URL，默认为 DashScope 官方地址
-// Dimensions: 向量维度，默认为 1536（text-embedding-v4 的默认维度）
-// HTTPClient: 自定义 HTTP 客户端，如果为 nil 则使用默认客户端
+// Config contains configuration for creating a Qwen Embedder client.
 type Config struct {
-	APIKey     string
-	Model      string
-	BaseURL    string
+	// APIKey is the DashScope API key (required).
+	APIKey string
+
+	// Model is the model name to use (default: "text-embedding-v4").
+	Model string
+
+	// BaseURL is the API base URL (default: DashScope official address).
+	BaseURL string
+
+	// Dimensions is the vector dimension (default: 1536 for text-embedding-v4).
 	Dimensions int
+
+	// HTTPClient is a custom HTTP client (uses default if nil).
 	HTTPClient *http.Client
 }
 
-// NewClient 创建新的 Qwen Embedder 客户端
-// 参数:
-//   - cfg: Qwen Embedder 配置，包含 APIKey、Model、BaseURL、Dimensions 等
-// 返回:
-//   - *Client: Qwen Embedder 客户端实例
-//   - error: 如果配置无效（如缺少 APIKey）或初始化失败则返回错误
+// NewClient creates a new Qwen Embedder client.
+//
+// Parameters:
+//   - cfg: Qwen Embedder configuration containing APIKey, Model, BaseURL, Dimensions, etc.
+//
+// Returns:
+//   - *Client: Qwen Embedder client instance
+//   - error: Error if configuration is invalid (e.g., missing APIKey) or initialization fails
 func NewClient(cfg *Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("API key is required")
@@ -58,7 +78,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	dimensions := cfg.Dimensions
 	if dimensions == 0 {
-		dimensions = 1536 // text-embedding-v4 默认维度
+		dimensions = 1536 // text-embedding-v4 default dimension
 	}
 
 	client := cfg.HTTPClient
@@ -77,15 +97,17 @@ func NewClient(cfg *Config) (*Client, error) {
 	}, nil
 }
 
-// Embed 将单个文本转换为向量
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - text: 要向量化的文本内容
-// 返回:
-//   - []float64: 文本的向量表示（维度由配置决定）
-//   - error: 如果向量化失败则返回错误
+// Embed converts a single text string into a vector embedding.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - text: Text content to embed
+//
+// Returns:
+//   - []float64: Vector representation of the text (dimension determined by configuration)
+//   - error: Error if embedding fails
 func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
-	// 构建请求
+	// Build request
 	reqBody := map[string]interface{}{
 		"model": c.model,
 		"input": map[string]interface{}{
@@ -93,14 +115,14 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 		},
 	}
 
-	// 添加维度参数
+	// Add dimension parameter
 	if c.dimensions > 0 {
 		reqBody["parameters"] = map[string]interface{}{
 			"dimension": c.dimensions,
 		}
 	}
 
-	// 默认使用 document 类型
+	// Default to document type
 	reqBody["text_type"] = "document"
 
 	jsonData, err := json.Marshal(reqBody)
@@ -108,7 +130,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	// 创建 HTTP 请求
+	// Create HTTP request
 	url := fmt.Sprintf("%s/services/embeddings/text-embedding/text-embedding", c.baseURL)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -118,19 +140,19 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
-	// 发送请求
+	// Send request
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 解析响应
+	// Parse response
 	var response struct {
 		Output struct {
 			Embeddings []struct {
@@ -150,15 +172,20 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float64, error) {
 	return response.Output.Embeddings[0].Embedding, nil
 }
 
-// EmbedBatch 批量将多个文本转换为向量
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - texts: 要向量化的文本列表
-// 返回:
-//   - [][]float64: 每个文本对应的向量表示（顺序与输入文本一致）
-//   - error: 如果向量化失败或返回结果数量不匹配则返回错误
+// EmbedBatch converts multiple text strings into vector embeddings in a single batch.
+//
+// This method is more efficient than calling Embed multiple times,
+// as it can batch process requests.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - texts: List of texts to embed
+//
+// Returns:
+//   - [][]float64: Vector representations for each text (order matches input texts)
+//   - error: Error if embedding fails or number of results doesn't match input
 func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, error) {
-	// 构建请求
+	// Build request
 	reqBody := map[string]interface{}{
 		"model": c.model,
 		"input": map[string]interface{}{
@@ -166,14 +193,14 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, e
 		},
 	}
 
-	// 添加维度参数
+	// Add dimension parameter
 	if c.dimensions > 0 {
 		reqBody["parameters"] = map[string]interface{}{
 			"dimension": c.dimensions,
 		}
 	}
 
-	// 默认使用 document 类型
+	// Default to document type
 	reqBody["text_type"] = "document"
 
 	jsonData, err := json.Marshal(reqBody)
@@ -181,7 +208,7 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, e
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	// 创建 HTTP 请求
+	// Create HTTP request
 	url := fmt.Sprintf("%s/services/embeddings/text-embedding/text-embedding", c.baseURL)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -191,19 +218,19 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, e
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
-	// 发送请求
+	// Send request
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 解析响应
+	// Parse response
 	var response struct {
 		Output struct {
 			Embeddings []struct {
@@ -228,17 +255,20 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([][]float64, e
 	return embeddings, nil
 }
 
-// Dimensions 返回向量维度
-// 返回:
-//   - int: 向量维度数
+// Dimensions returns the dimension of embedding vectors produced by this provider.
+//
+// Returns:
+//   - int: Vector dimension number
 func (c *Client) Dimensions() int {
 	return c.dimensions
 }
 
-// Close 关闭客户端连接
-// HTTP 客户端不需要显式关闭，此方法为接口兼容性保留
-// 返回:
-//   - error: 始终返回 nil
+// Close closes the client connection.
+//
+// HTTP clients do not need explicit closing, this method is retained for interface compatibility.
+//
+// Returns:
+//   - error: Always returns nil
 func (c *Client) Close() error {
 	return nil
 }

@@ -13,9 +13,9 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/llm"
 )
 
-// Client Anthropic LLM 客户端
-// 实现了 llm.Provider 接口，提供基于 Anthropic Claude API 的文本生成功能
-// 支持 system 消息分离，符合 Anthropic Messages API 规范
+// Client is an Anthropic LLM client.
+// It implements the llm.Provider interface and provides text generation functionality based on the Anthropic Claude API.
+// Supports system message separation, conforming to the Anthropic Messages API specification.
 type Client struct {
 	client  *http.Client
 	apiKey  string
@@ -23,11 +23,11 @@ type Client struct {
 	baseURL string
 }
 
-// Config Anthropic LLM 配置
-// APIKey: Anthropic API 密钥（必需）
-// Model: 使用的模型名称，默认为 "claude-3-5-sonnet-20240620"
-// BaseURL: API 基础 URL，默认为 "https://api.anthropic.com"
-// HTTPClient: 自定义 HTTP 客户端，如果为 nil 则使用默认客户端（超时 120 秒）
+// Config is the configuration for Anthropic LLM.
+// APIKey: Anthropic API key (required)
+// Model: Model name to use, defaults to "claude-3-5-sonnet-20240620"
+// BaseURL: API base URL, defaults to "https://api.anthropic.com"
+// HTTPClient: Custom HTTP client, if nil uses default client (120 seconds timeout)
 type Config struct {
 	APIKey     string
 	Model      string
@@ -35,13 +35,14 @@ type Config struct {
 	HTTPClient *http.Client
 }
 
-// NewClient 创建新的 Anthropic LLM 客户端
-// 参数:
-//   - cfg: Anthropic 配置，包含 APIKey、Model、BaseURL 等
+// NewClient creates a new Anthropic LLM client.
 //
-// 返回:
-//   - *Client: Anthropic 客户端实例
-//   - error: 如果配置无效（如缺少 APIKey）或初始化失败则返回错误
+// Args:
+//   - cfg: Anthropic configuration containing APIKey, Model, BaseURL, etc.
+//
+// Returns:
+//   - *Client: Anthropic client instance
+//   - error: Returns an error if the configuration is invalid (e.g., missing APIKey) or initialization fails
 func NewClient(cfg *Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("API key is required")
@@ -72,15 +73,16 @@ func NewClient(cfg *Config) (*Client, error) {
 	}, nil
 }
 
-// Generate 根据提示词生成文本
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - prompt: 用户输入的提示词
-//   - opts: 可选的生成参数（temperature, max_tokens, top_p 等）
+// Generate generates text based on the prompt.
 //
-// 返回:
-//   - string: 生成的文本内容
-//   - error: 如果生成失败则返回错误
+// Args:
+//   - ctx: Context for controlling the request lifecycle
+//   - prompt: User input prompt
+//   - opts: Optional generation parameters (temperature, max_tokens, top_p, etc.)
+//
+// Returns:
+//   - string: Generated text content
+//   - error: Returns an error if generation fails
 func (c *Client) Generate(ctx context.Context, prompt string, opts ...llm.GenerateOption) (string, error) {
 	messages := []llm.Message{
 		{Role: "user", Content: prompt},
@@ -88,21 +90,22 @@ func (c *Client) Generate(ctx context.Context, prompt string, opts ...llm.Genera
 	return c.GenerateWithMessages(ctx, messages, opts...)
 }
 
-// GenerateWithMessages 使用消息历史生成文本
-// 支持多轮对话，可以传入完整的消息历史（包括 system、user、assistant 消息）
-// 注意: Anthropic API 要求将 system 消息单独传递，而不是放在 messages 数组中
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - messages: 消息历史列表，每个消息包含 role 和 content（system 消息会被自动分离）
-//   - opts: 可选的生成参数（temperature, max_tokens, top_p 等）
+// GenerateWithMessages generates text using message history.
+// Supports multi-turn conversations and accepts complete message history (including system, user, and assistant messages).
+// Note: Anthropic API requires system messages to be passed separately, not in the messages array.
 //
-// 返回:
-//   - string: 生成的文本内容
-//   - error: 如果生成失败则返回错误
+// Args:
+//   - ctx: Context for controlling the request lifecycle
+//   - messages: Message history list, each message contains role and content (system messages will be automatically separated)
+//   - opts: Optional generation parameters (temperature, max_tokens, top_p, etc.)
+//
+// Returns:
+//   - string: Generated text content
+//   - error: Returns an error if generation fails
 func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Message, opts ...llm.GenerateOption) (string, error) {
 	options := llm.ApplyGenerateOptions(opts)
 
-	// 分离 system 消息和其他消息
+	// Separate system messages from other messages
 	var systemMessage string
 	var filteredMessages []map[string]string
 
@@ -117,7 +120,7 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 		}
 	}
 
-	// 构建请求体
+	// Build request body
 	reqBody := map[string]interface{}{
 		"model":       c.model,
 		"max_tokens":  options.MaxTokens,
@@ -139,7 +142,7 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	// 创建 HTTP 请求
+	// Create HTTP request
 	url := fmt.Sprintf("%s/v1/messages", c.baseURL)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -150,19 +153,19 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 	req.Header.Set("x-api-key", c.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	// 发送请求
+	// Send request
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 解析响应
+	// Parse response
 	var response struct {
 		Content []struct {
 			Type string `json:"type"`
@@ -181,10 +184,11 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 	return response.Content[0].Text, nil
 }
 
-// Close 关闭客户端连接
-// HTTP 客户端不需要显式关闭，此方法为接口兼容性保留
-// 返回:
-//   - error: 始终返回 nil
+// Close closes the client connection.
+// HTTP client does not require explicit closing; this method is retained for interface compatibility.
+//
+// Returns:
+//   - error: Always returns nil
 func (c *Client) Close() error {
 	return nil
 }

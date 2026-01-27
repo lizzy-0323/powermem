@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// buildWhereClause 构建 WHERE 子句（修复版本）
+// buildWhereClause builds a WHERE clause (fixed version).
 func buildWhereClause(userID, agentID string, filters map[string]interface{}) (string, []interface{}) {
 	conditions := []string{}
 	args := []interface{}{}

@@ -48,13 +48,13 @@ func TestLoadConfigFromEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// 设置环境变量
+			// Set environment variables
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 			defer func() {
 				for k := range tt.envVars {
-					os.Unsetenv(k)
+					_ = os.Unsetenv(k)
 				}
 			}()
 
@@ -161,18 +161,18 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestFindEnvFile(t *testing.T) {
-	// 测试查找 .env 文件
+	// Test finding .env file
 	envPath, found := powermem.FindEnvFile()
 	
-	// 这个测试取决于实际的文件系统状态
-	// 我们只验证函数不会 panic
+	// This test depends on actual file system state
+	// We only verify the function doesn't panic
 	assert.NotNil(t, envPath)
-	// found 可能是 true 或 false，取决于是否存在 .env 文件
+	// found may be true or false, depending on whether .env file exists
 	_ = found
 }
 
 func TestDefaultConfig(t *testing.T) {
-	// 测试默认配置值
+	// Test default config values
 	config := &powermem.Config{
 		LLM: powermem.LLMConfig{
 			Provider: "openai",

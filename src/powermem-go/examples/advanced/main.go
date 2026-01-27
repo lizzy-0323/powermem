@@ -50,14 +50,27 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Printf("Warning: failed to close client: %v", err)
+		}
+	}()
 
-	fmt.Println("✓ Client initialized with intelligent memory features!\n")
+	fmt.Println("✓ Client initialized with intelligent memory features!")
 
 	ctx := context.Background()
 	userID := "user456"
 
-	// 场景 1: 智能去重
+	// Clean up any existing memories for this user (optional, for demo purposes)
+	fmt.Println("\nCleaning up existing memories...")
+	err = client.DeleteAll(ctx, powermem.WithUserIDForDeleteAll(userID))
+	if err != nil {
+		log.Printf("Warning: failed to clean up: %v", err)
+	} else {
+		fmt.Println("✓ Cleanup completed!")
+	}
+
+	// Scenario 1: Intelligent Deduplication
 	fmt.Println(repeat("=", 80))
 	fmt.Println("SCENARIO 1: Intelligent Deduplication")
 	fmt.Println(repeat("=", 80))

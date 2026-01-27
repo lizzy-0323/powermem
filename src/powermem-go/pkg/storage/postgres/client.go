@@ -12,14 +12,14 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/storage"
 )
 
-// Client PostgreSQL + pgvector 客户端
+// Client is a PostgreSQL + pgvector client.
 type Client struct {
 	db             *sql.DB
 	collectionName string
 	dimensions     int
 }
 
-// Config PostgreSQL 配置
+// Config contains PostgreSQL configuration.
 type Config struct {
 	Host               string
 	Port               int
@@ -31,7 +31,7 @@ type Config struct {
 	SSLMode            string
 }
 
-// NewClient 创建新的 PostgreSQL 客户端
+// NewClient creates a new PostgreSQL client.
 func NewClient(cfg *Config) (*Client, error) {
 	sslMode := cfg.SSLMode
 	if sslMode == "" {
@@ -46,7 +46,7 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("NewPostgresClient: %w", err)
 	}
 
-	// 测试连接
+	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("NewPostgresClient: %w", err)
 	}
@@ -57,7 +57,7 @@ func NewClient(cfg *Config) (*Client, error) {
 		dimensions:     cfg.EmbeddingModelDims,
 	}
 
-	// 初始化 pgvector 扩展和表结构
+	// Initialize pgvector extension and table structure
 	if err := client.initTables(context.Background()); err != nil {
 		return nil, err
 	}
@@ -65,15 +65,15 @@ func NewClient(cfg *Config) (*Client, error) {
 	return client, nil
 }
 
-// initTables 初始化数据库表
+// initTables initializes the database table.
 func (c *Client) initTables(ctx context.Context) error {
-	// 启用 pgvector 扩展
+	// Enable pgvector extension
 	_, err := c.db.ExecContext(ctx, "CREATE EXTENSION IF NOT EXISTS vector")
 	if err != nil {
 		return fmt.Errorf("initTables: create extension: %w", err)
 	}
 
-	// 创建表（使用 pgvector 的 vector 类型）
+	// Create table (using pgvector's vector type)
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			id BIGINT PRIMARY KEY,
@@ -94,7 +94,7 @@ func (c *Client) initTables(ctx context.Context) error {
 		return fmt.Errorf("initTables: create table: %w", err)
 	}
 
-	// 创建索引
+	// Create index
 	indexQuery := fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS idx_%s_user_agent ON %s(user_id, agent_id)
 	`, c.collectionName, c.collectionName)
@@ -106,7 +106,7 @@ func (c *Client) initTables(ctx context.Context) error {
 	return nil
 }
 
-// Insert 插入记忆
+// Insert inserts a memory.
 func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s 
@@ -114,7 +114,7 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, c.collectionName)
 
-	// 将向量转换为 PostgreSQL vector 格式: "[0.1,0.2,0.3,...]"
+	// Convert vector to PostgreSQL vector format: "[0.1,0.2,0.3,...]"
 	vectorStr := vectorToString(memory.Embedding)
 
 	metadataJSON, err := json.Marshal(memory.Metadata)
@@ -140,14 +140,14 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	return nil
 }
 
-// Search 向量搜索（使用 pgvector 的余弦相似度）
+// Search performs vector search using pgvector's cosine similarity.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
 	queryVectorStr := vectorToString(embedding)
 
-	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, opts.Filters)
+	// Build WHERE clause (starting from $2 since $1 is the query vector)
+	whereClause, filterArgs := buildWhereClauseWithOffset(opts.UserID, opts.AgentID, opts.Filters, 2)
 
-	// 使用 pgvector 的 <=> 操作符（余弦距离，1 - 余弦相似度）
-	// 使用 <-> 操作符（L2 距离）
+	// Use pgvector's <=> operator (cosine distance, 1 - cosine similarity)
 	query := fmt.Sprintf(`
 		SELECT 
 			id, user_id, agent_id, content, embedding, metadata,
@@ -157,22 +157,23 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		%s
 		ORDER BY embedding <=> $1
 		LIMIT $%d
-	`, c.collectionName, whereClause, len(args)+1)
+	`, c.collectionName, whereClause, len(filterArgs)+2)
 
-	// 将查询向量添加到参数列表的开头
-	allArgs := append([]interface{}{queryVectorStr}, args...)
+	// Build final args: query vector, filter args, then limit
+	allArgs := []interface{}{queryVectorStr}
+	allArgs = append(allArgs, filterArgs...)
 	allArgs = append(allArgs, opts.Limit)
 
 	rows, err := c.db.QueryContext(ctx, query, allArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("Search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return c.scanMemories(rows, true)
 }
 
-// Get 根据 ID 获取记忆
+// Get retrieves a memory by ID.
 func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, content, embedding, metadata,
@@ -194,7 +195,7 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update 更新记忆
+// Update updates a memory.
 func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
 	vectorStr := vectorToString(embedding)
 
@@ -221,7 +222,7 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 	return c.Get(ctx, id)
 }
 
-// Delete 删除记忆
+// Delete deletes a memory.
 func (c *Client) Delete(ctx context.Context, id int64) error {
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = $1", c.collectionName)
 
@@ -242,7 +243,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetAll 获取所有记忆
+// GetAll retrieves all memories.
 func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*storage.Memory, error) {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -261,12 +262,12 @@ func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*st
 	if err != nil {
 		return nil, fmt.Errorf("GetAll: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return c.scanMemories(rows, false)
 }
 
-// DeleteAll 删除所有记忆
+// DeleteAll deletes all memories.
 func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) error {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -280,7 +281,7 @@ func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) 
 	return nil
 }
 
-// Close 关闭数据库连接
+// Close closes the database connection.
 func (c *Client) Close() error {
 	if c.db != nil {
 		return c.db.Close()
@@ -288,7 +289,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// CreateIndex 创建向量索引（HNSW 索引）
+// CreateIndex creates a vector index (HNSW index).
 func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexConfig) error {
 	switch config.IndexType {
 	case storage.IndexTypeHNSW:
@@ -313,7 +314,7 @@ func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexCon
 	}
 }
 
-// vectorToString 将向量转换为 PostgreSQL vector 格式
+// vectorToString converts a vector to PostgreSQL vector format.
 func vectorToString(vector []float64) string {
 	if len(vector) == 0 {
 		return "[]"
@@ -327,8 +328,7 @@ func vectorToString(vector []float64) string {
 	return "[" + strings.Join(parts, ",") + "]"
 }
 
-
-// scanMemory 扫描单条记忆
+// scanMemory scans a single memory.
 func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	var memory storage.Memory
 	var embeddingStr string
@@ -351,21 +351,21 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 		return nil, err
 	}
 
-	// 解析 embedding (pgvector 返回字符串格式)
+	// Parse embedding (pgvector returns string format)
 	embedding, err := parseVectorString(embeddingStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse embedding: %w", err)
 	}
 	memory.Embedding = embedding
 
-	// 解析 metadata
+	// Parse metadata
 	if len(metadataStr) > 0 {
 		if err := json.Unmarshal(metadataStr, &memory.Metadata); err != nil {
 			return nil, fmt.Errorf("parse metadata: %w", err)
 		}
 	}
 
-	// 处理 last_accessed_at
+	// Handle last_accessed_at
 	if lastAccessedAt.Valid {
 		memory.LastAccessedAt = &lastAccessedAt.Time
 	}
@@ -373,7 +373,7 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	return &memory, nil
 }
 
-// scanMemories 扫描多条记忆
+// scanMemories scans multiple memories.
 func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory, error) {
 	var memories []*storage.Memory
 
@@ -420,21 +420,21 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			}
 		}
 
-		// 解析 embedding
+		// Parse embedding
 		embedding, err := parseVectorString(embeddingStr)
 		if err != nil {
 			return nil, fmt.Errorf("parse embedding: %w", err)
 		}
 		memory.Embedding = embedding
 
-		// 解析 metadata
+		// Parse metadata
 		if len(metadataStr) > 0 {
 			if err := json.Unmarshal(metadataStr, &memory.Metadata); err != nil {
 				return nil, fmt.Errorf("parse metadata: %w", err)
 			}
 		}
 
-		// 处理 last_accessed_at
+		// Handle last_accessed_at
 		if lastAccessedAt.Valid {
 			memory.LastAccessedAt = &lastAccessedAt.Time
 		}
@@ -449,9 +449,9 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 	return memories, nil
 }
 
-// parseVectorString 解析 PostgreSQL vector 字符串
+// parseVectorString parses a PostgreSQL vector string.
 func parseVectorString(s string) ([]float64, error) {
-	// 移除首尾的方括号
+	// Remove leading and trailing square brackets
 	s = strings.Trim(s, "[]")
 	if s == "" {
 		return []float64{}, nil

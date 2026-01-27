@@ -9,31 +9,31 @@ import (
 )
 
 func TestDedupManager(t *testing.T) {
-	// 创建模拟的存储接口
-	// 注意：这里我们需要一个 mock 存储，但为了简化，我们只测试管理器本身
+	// Create mock storage interface
+	// Note: We need a mock storage here, but for simplicity, we only test the manager itself
 	threshold := 0.95
 	
-	// 由于 DedupManager 需要 storage.VectorStore，我们需要 mock
-	// 这里我们只测试阈值设置
+	// Since DedupManager requires storage.VectorStore, we need to mock it
+	// Here we only test threshold setting
 	assert.Greater(t, threshold, 0.0)
 	assert.LessOrEqual(t, threshold, 1.0)
 }
 
 func TestCheckDuplicate(t *testing.T) {
-	// 测试去重逻辑
-	// 由于需要存储接口，这里只做基本验证
+	// Test deduplication logic
+	// Since storage interface is required, only basic validation is done here
 	threshold := 0.95
 	
-	// 相似度计算测试
+	// Similarity calculation test
 	similarity1 := 0.98
 	similarity2 := 0.85
 	
-	assert.True(t, similarity1 >= threshold, "高相似度应该被认为是重复")
-	assert.False(t, similarity2 >= threshold, "低相似度不应该被认为是重复")
+	assert.True(t, similarity1 >= threshold, "High similarity should be considered duplicate")
+	assert.False(t, similarity2 >= threshold, "Low similarity should not be considered duplicate")
 }
 
 func TestMergeMemories(t *testing.T) {
-	// 测试合并记忆的逻辑
+	// Test memory merging logic
 	memory1 := &intelligence.Memory{
 		ID:      1,
 		Content: "User likes Python",
@@ -44,7 +44,7 @@ func TestMergeMemories(t *testing.T) {
 		Content: "User prefers Python programming",
 	}
 	
-	// 验证记忆结构
+	// Verify memory structure
 	assert.NotNil(t, memory1)
 	assert.NotNil(t, memory2)
 	assert.NotEqual(t, memory1.ID, memory2.ID)

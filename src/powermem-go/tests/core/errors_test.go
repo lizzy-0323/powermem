@@ -62,7 +62,7 @@ func TestMemoryError(t *testing.T) {
 	assert.Contains(t, memErr.Error(), "test_operation")
 	assert.Contains(t, memErr.Error(), "original error")
 	
-	// 验证 MemoryError 结构
+	// Verify MemoryError structure
 	var target *powermem.MemoryError
 	if errors.As(memErr, &target) {
 		assert.Equal(t, "test_operation", target.Op)

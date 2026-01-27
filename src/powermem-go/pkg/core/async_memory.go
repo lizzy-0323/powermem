@@ -1,3 +1,4 @@
+// Package core provides the main PowerMem client and memory management functionality.
 package core
 
 import (
@@ -5,21 +6,37 @@ import (
 	"sync"
 )
 
-// AsyncClient 异步 PowerMem 客户端
-// 提供与同步 Client 相同的功能，但所有操作都在独立的 goroutine 中执行
-// 适合需要并发处理多个操作的场景
+// AsyncClient provides asynchronous PowerMem operations.
+//
+// It wraps the synchronous Client and executes all operations in separate goroutines,
+// making it suitable for scenarios requiring concurrent processing of multiple operations.
+//
+// All async methods return channels that will receive the results when operations complete.
+// The client tracks all goroutines and provides Wait() to ensure all operations finish.
+//
+// Example:
+//
+//	asyncClient, _ := core.NewAsyncClient(config)
+//	defer asyncClient.Close()
+//
+//	resultChan := asyncClient.AddAsync(ctx, "User likes Python", core.WithUserID("user_001"))
+//	result := <-resultChan
+//	if result.Error != nil {
+//	    log.Fatal(result.Error)
+//	}
 type AsyncClient struct {
 	*Client
 	wg sync.WaitGroup
 }
 
-// NewAsyncClient 创建新的异步 PowerMem 客户端
-// 参数:
-//   - cfg: PowerMem 配置
+// NewAsyncClient creates a new asynchronous PowerMem client.
 //
-// 返回:
-//   - *AsyncClient: 异步客户端实例
-//   - error: 如果配置无效或初始化失败则返回错误
+// Parameters:
+//   - cfg: PowerMem configuration
+//
+// Returns:
+//   - *AsyncClient: The asynchronous client instance
+//   - error: Error if configuration is invalid or initialization fails
 func NewAsyncClient(cfg *Config) (*AsyncClient, error) {
 	client, err := NewClient(cfg)
 	if err != nil {
@@ -31,22 +48,24 @@ func NewAsyncClient(cfg *Config) (*AsyncClient, error) {
 	}, nil
 }
 
-// AddAsync 异步添加记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - content: 要添加的记忆内容
-//   - opts: 可选的添加选项（UserID、AgentID、Metadata 等）
+// AddAsync adds a memory asynchronously.
 //
-// 返回:
-//   - <-chan *MemoryResult: 接收结果的 channel，包含 Memory 和 error
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - content: Memory content to add
+//   - opts: Optional add options (UserID, AgentID, Metadata, etc.)
+//
+// Returns:
+//   - <-chan *MemoryResult: Channel that receives the result containing Memory and error
 func (ac *AsyncClient) AddAsync(ctx context.Context, content string, opts ...AddOption) <-chan *MemoryResult {
 	resultChan := make(chan *MemoryResult, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		memory, err := ac.Client.Add(ctx, content, opts...)
+		memory, err := ac.Add(ctx, content, opts...)
 		resultChan <- &MemoryResult{
 			Memory: memory,
 			Error:  err,
@@ -57,22 +76,24 @@ func (ac *AsyncClient) AddAsync(ctx context.Context, content string, opts ...Add
 	return resultChan
 }
 
-// SearchAsync 异步搜索记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - query: 搜索查询文本
-//   - opts: 可选的搜索选项（UserID、AgentID、Limit、Filters 等）
+// SearchAsync searches memories asynchronously.
 //
-// 返回:
-//   - <-chan *AsyncSearchResult: 接收搜索结果的 channel，包含 Memories 和 error
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - query: Search query text
+//   - opts: Optional search options (UserID, AgentID, Limit, Filters, etc.)
+//
+// Returns:
+//   - <-chan *AsyncSearchResult: Channel that receives search results containing Memories and error
 func (ac *AsyncClient) SearchAsync(ctx context.Context, query string, opts ...SearchOption) <-chan *AsyncSearchResult {
 	resultChan := make(chan *AsyncSearchResult, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		memories, err := ac.Client.Search(ctx, query, opts...)
+		memories, err := ac.Search(ctx, query, opts...)
 		resultChan <- &AsyncSearchResult{
 			Memories: memories,
 			Error:    err,
@@ -83,21 +104,23 @@ func (ac *AsyncClient) SearchAsync(ctx context.Context, query string, opts ...Se
 	return resultChan
 }
 
-// GetAsync 异步获取记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - id: 记忆 ID
+// GetAsync retrieves a memory by ID asynchronously.
 //
-// 返回:
-//   - <-chan *MemoryResult: 接收结果的 channel，包含 Memory 和 error
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - id: Memory ID
+//
+// Returns:
+//   - <-chan *MemoryResult: Channel that receives the result containing Memory and error
 func (ac *AsyncClient) GetAsync(ctx context.Context, id int64) <-chan *MemoryResult {
 	resultChan := make(chan *MemoryResult, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		memory, err := ac.Client.Get(ctx, id)
+		memory, err := ac.Get(ctx, id)
 		resultChan <- &MemoryResult{
 			Memory: memory,
 			Error:  err,
@@ -108,22 +131,24 @@ func (ac *AsyncClient) GetAsync(ctx context.Context, id int64) <-chan *MemoryRes
 	return resultChan
 }
 
-// UpdateAsync 异步更新记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - id: 记忆 ID
-//   - content: 新的记忆内容
+// UpdateAsync updates a memory asynchronously.
 //
-// 返回:
-//   - <-chan *MemoryResult: 接收结果的 channel，包含 Memory 和 error
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - id: Memory ID
+//   - content: New memory content
+//
+// Returns:
+//   - <-chan *MemoryResult: Channel that receives the result containing Memory and error
 func (ac *AsyncClient) UpdateAsync(ctx context.Context, id int64, content string) <-chan *MemoryResult {
 	resultChan := make(chan *MemoryResult, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		memory, err := ac.Client.Update(ctx, id, content)
+		memory, err := ac.Update(ctx, id, content)
 		resultChan <- &MemoryResult{
 			Memory: memory,
 			Error:  err,
@@ -134,21 +159,23 @@ func (ac *AsyncClient) UpdateAsync(ctx context.Context, id int64, content string
 	return resultChan
 }
 
-// DeleteAsync 异步删除记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - id: 记忆 ID
+// DeleteAsync deletes a memory asynchronously.
 //
-// 返回:
-//   - <-chan error: 接收错误的 channel，如果删除成功则为 nil
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - id: Memory ID
+//
+// Returns:
+//   - <-chan error: Channel that receives error (nil if deletion succeeds)
 func (ac *AsyncClient) DeleteAsync(ctx context.Context, id int64) <-chan error {
 	errChan := make(chan error, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		err := ac.Client.Delete(ctx, id)
+		err := ac.Delete(ctx, id)
 		errChan <- err
 		close(errChan)
 	}()
@@ -156,21 +183,23 @@ func (ac *AsyncClient) DeleteAsync(ctx context.Context, id int64) <-chan error {
 	return errChan
 }
 
-// GetAllAsync 异步获取所有记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - opts: 可选的获取选项（UserID、AgentID、Limit、Offset 等）
+// GetAllAsync retrieves all memories asynchronously.
 //
-// 返回:
-//   - <-chan *AsyncGetAllResult: 接收结果的 channel，包含 Memories 和 error
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - opts: Optional retrieval options (UserID, AgentID, Limit, Offset, etc.)
+//
+// Returns:
+//   - <-chan *AsyncGetAllResult: Channel that receives results containing Memories and error
 func (ac *AsyncClient) GetAllAsync(ctx context.Context, opts ...GetAllOption) <-chan *AsyncGetAllResult {
 	resultChan := make(chan *AsyncGetAllResult, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		memories, err := ac.Client.GetAll(ctx, opts...)
+		memories, err := ac.GetAll(ctx, opts...)
 		resultChan <- &AsyncGetAllResult{
 			Memories: memories,
 			Error:    err,
@@ -181,21 +210,23 @@ func (ac *AsyncClient) GetAllAsync(ctx context.Context, opts ...GetAllOption) <-
 	return resultChan
 }
 
-// DeleteAllAsync 异步删除所有记忆
-// 在独立的 goroutine 中执行，通过 channel 返回结果
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - opts: 可选的删除选项（UserID、AgentID 等）
+// DeleteAllAsync deletes all memories asynchronously.
 //
-// 返回:
-//   - <-chan error: 接收错误的 channel，如果删除成功则为 nil
+// The operation executes in a separate goroutine and returns results via a channel.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - opts: Optional deletion options (UserID, AgentID, etc.)
+//
+// Returns:
+//   - <-chan error: Channel that receives error (nil if deletion succeeds)
 func (ac *AsyncClient) DeleteAllAsync(ctx context.Context, opts ...DeleteAllOption) <-chan error {
 	errChan := make(chan error, 1)
 	ac.wg.Add(1)
 
 	go func() {
 		defer ac.wg.Done()
-		err := ac.Client.DeleteAll(ctx, opts...)
+		err := ac.DeleteAll(ctx, opts...)
 		errChan <- err
 		close(errChan)
 	}()
@@ -203,33 +234,45 @@ func (ac *AsyncClient) DeleteAllAsync(ctx context.Context, opts ...DeleteAllOpti
 	return errChan
 }
 
-// Wait 等待所有异步操作完成
-// 用于在程序退出前确保所有 goroutine 都已完成
+// Wait waits for all asynchronous operations to complete.
+//
+// This method blocks until all goroutines started by async methods have finished.
+// It should be called before program exit to ensure all operations complete.
 func (ac *AsyncClient) Wait() {
 	ac.wg.Wait()
 }
 
-// Close 关闭异步客户端
-// 会先等待所有异步操作完成，然后关闭底层客户端
+// Close closes the asynchronous client.
+//
+// It first waits for all asynchronous operations to complete, then closes the underlying client.
 func (ac *AsyncClient) Close() error {
 	ac.Wait()
 	return ac.Client.Close()
 }
 
-// MemoryResult 内存操作结果
+// MemoryResult contains the result of a memory operation.
 type MemoryResult struct {
+	// Memory is the memory returned by the operation (nil if error occurred).
 	Memory *Memory
-	Error  error
+
+	// Error is the error returned by the operation (nil if operation succeeded).
+	Error error
 }
 
-// AsyncSearchResult 异步搜索结果
+// AsyncSearchResult contains the result of an asynchronous search operation.
 type AsyncSearchResult struct {
+	// Memories is the list of matching memories.
 	Memories []*Memory
-	Error    error
+
+	// Error is the error returned by the operation (nil if operation succeeded).
+	Error error
 }
 
-// AsyncGetAllResult 异步获取所有结果
+// AsyncGetAllResult contains the result of an asynchronous GetAll operation.
 type AsyncGetAllResult struct {
+	// Memories is the list of memories.
 	Memories []*Memory
-	Error    error
+
+	// Error is the error returned by the operation (nil if operation succeeded).
+	Error error
 }

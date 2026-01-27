@@ -1,3 +1,7 @@
+// Package storage provides interfaces and types for vector storage backends.
+//
+// It defines the VectorStore interface that all storage implementations must satisfy,
+// along with memory types and configuration options.
 package storage
 
 import (
@@ -5,113 +9,198 @@ import (
 	"time"
 )
 
-// Memory 记忆类型（避免循环依赖）
+// Memory represents a memory stored in the vector store.
+//
+// This type is defined in the storage package to avoid circular dependencies
+// with the core package. It mirrors the core.Memory structure.
 type Memory struct {
-	ID                int64
-	UserID            string
-	AgentID           string
-	Content           string
-	Embedding         []float64
-	SparseEmbedding   map[int]float64
-	Metadata          map[string]interface{}
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// ID is the unique identifier of the memory.
+	ID int64
+
+	// UserID identifies the user who owns this memory.
+	UserID string
+
+	// AgentID identifies the agent associated with this memory.
+	AgentID string
+
+	// Content is the text content of the memory.
+	Content string
+
+	// Embedding is the vector embedding for similarity search.
+	Embedding []float64
+
+	// SparseEmbedding is the sparse vector embedding (for hybrid search).
+	SparseEmbedding map[int]float64
+
+	// Metadata contains additional structured information.
+	Metadata map[string]interface{}
+
+	// CreatedAt is when the memory was created.
+	CreatedAt time.Time
+
+	// UpdatedAt is when the memory was last updated.
+	UpdatedAt time.Time
+
+	// RetentionStrength is the current retention strength (0.0-1.0).
 	RetentionStrength float64
-	LastAccessedAt    *time.Time
-	Score             float64
+
+	// LastAccessedAt is when the memory was last accessed (nil if never accessed).
+	LastAccessedAt *time.Time
+
+	// Score is the similarity score from search operations.
+	Score float64
 }
 
-// VectorIndexType 向量索引类型
+// VectorIndexType defines the type of vector index for efficient similarity search.
 type VectorIndexType string
 
 const (
-	IndexTypeHNSW    VectorIndexType = "HNSW"
+	// IndexTypeHNSW uses Hierarchical Navigable Small World graph.
+	IndexTypeHNSW VectorIndexType = "HNSW"
+
+	// IndexTypeIVFFlat uses Inverted File Index with flat vectors.
 	IndexTypeIVFFlat VectorIndexType = "IVF_FLAT"
-	IndexTypeIVFPQ   VectorIndexType = "IVF_PQ"
+
+	// IndexTypeIVFPQ uses Inverted File Index with Product Quantization.
+	IndexTypeIVFPQ VectorIndexType = "IVF_PQ"
 )
 
-// MetricType 距离度量类型
+// MetricType defines the distance metric for vector similarity.
 type MetricType string
 
 const (
+	// MetricCosine uses cosine similarity.
 	MetricCosine MetricType = "cosine"
-	MetricL2     MetricType = "l2"
-	MetricIP     MetricType = "ip"
+
+	// MetricL2 uses Euclidean distance (L2 norm).
+	MetricL2 MetricType = "l2"
+
+	// MetricIP uses inner product (dot product).
+	MetricIP MetricType = "ip"
 )
 
-// HNSWParams HNSW 索引参数
+// HNSWParams contains parameters for HNSW index configuration.
 type HNSWParams struct {
-	M              int
+	// M is the maximum number of connections for each node.
+	M int
+
+	// EfConstruction is the search depth during index construction.
 	EfConstruction int
-	EfSearch       int
+
+	// EfSearch is the search depth during queries.
+	EfSearch int
 }
 
-// IVFParams IVF 索引参数
+// IVFParams contains parameters for IVF (Inverted File) index configuration.
 type IVFParams struct {
-	Nlist  int
+	// Nlist is the number of clusters (centroids).
+	Nlist int
+
+	// Nprobe is the number of clusters to search during queries.
 	Nprobe int
 }
 
-// VectorIndexConfig 向量索引配置
+// VectorIndexConfig contains configuration for creating a vector index.
 type VectorIndexConfig struct {
-	IndexName   string
-	TableName   string
+	// IndexName is the name of the index.
+	IndexName string
+
+	// TableName is the name of the table/collection to index.
+	TableName string
+
+	// VectorField is the name of the vector field to index.
 	VectorField string
-	IndexType   VectorIndexType
-	MetricType  MetricType
-	HNSWParams  *HNSWParams
-	IVFParams   *IVFParams
+
+	// IndexType is the type of index to create.
+	IndexType VectorIndexType
+
+	// MetricType is the distance metric to use.
+	MetricType MetricType
+
+	// HNSWParams contains HNSW-specific parameters (if IndexType is HNSW).
+	HNSWParams *HNSWParams
+
+	// IVFParams contains IVF-specific parameters (if IndexType is IVF_FLAT or IVF_PQ).
+	IVFParams *IVFParams
 }
 
-// VectorStore 向量存储接口
+// VectorStore defines the interface for vector storage backends.
+//
+// All storage implementations (SQLite, PostgreSQL, OceanBase) must implement this interface.
 type VectorStore interface {
-	// Insert 插入一条记忆
+	// Insert inserts a memory into the store.
 	Insert(ctx context.Context, memory *Memory) error
 
-	// Search 向量搜索
+	// Search performs vector similarity search.
+	//
+	// Parameters:
+	//   - ctx: Context for cancellation
+	//   - embedding: Query embedding vector
+	//   - opts: Search options (UserID, AgentID, Limit, MinScore, Filters)
+	//
+	// Returns matching memories sorted by similarity (highest first).
 	Search(ctx context.Context, embedding []float64, opts *SearchOptions) ([]*Memory, error)
 
-	// Get 根据 ID 获取记忆
+	// Get retrieves a memory by ID.
 	Get(ctx context.Context, id int64) (*Memory, error)
 
-	// Update 更新记忆
+	// Update updates a memory's content and embedding.
 	Update(ctx context.Context, id int64, content string, embedding []float64) (*Memory, error)
 
-	// Delete 删除记忆
+	// Delete deletes a memory by ID.
 	Delete(ctx context.Context, id int64) error
 
-	// GetAll 获取所有记忆
+	// GetAll retrieves all memories with optional filtering and pagination.
 	GetAll(ctx context.Context, opts *GetAllOptions) ([]*Memory, error)
 
-	// DeleteAll 删除所有记忆
+	// DeleteAll deletes all memories matching the given filters.
 	DeleteAll(ctx context.Context, opts *DeleteAllOptions) error
 
-	// Close 关闭连接
+	// Close closes the store and releases resources.
 	Close() error
 
-	// CreateIndex 创建向量索引
+	// CreateIndex creates a vector index for improved search performance.
 	CreateIndex(ctx context.Context, config *VectorIndexConfig) error
 }
 
-// SearchOptions 搜索选项
+// SearchOptions contains options for search operations.
 type SearchOptions struct {
-	UserID   string
-	AgentID  string
-	Limit    int
-	MinScore float64
-	Filters  map[string]interface{}
-}
+	// UserID filters results to a specific user.
+	UserID string
 
-// GetAllOptions 获取所有记忆的选项
-type GetAllOptions struct {
-	UserID  string
+	// AgentID filters results to a specific agent.
 	AgentID string
-	Limit   int
-	Offset  int
+
+	// Limit sets the maximum number of results to return.
+	Limit int
+
+	// MinScore sets the minimum similarity score for results.
+	MinScore float64
+
+	// Filters provides additional metadata filters.
+	Filters map[string]interface{}
 }
 
-// DeleteAllOptions 删除所有记忆的选项
+// GetAllOptions contains options for GetAll operations.
+type GetAllOptions struct {
+	// UserID filters results to a specific user.
+	UserID string
+
+	// AgentID filters results to a specific agent.
+	AgentID string
+
+	// Limit sets the maximum number of results to return.
+	Limit int
+
+	// Offset sets the number of results to skip (for pagination).
+	Offset int
+}
+
+// DeleteAllOptions contains options for DeleteAll operations.
 type DeleteAllOptions struct {
-	UserID  string
+	// UserID filters deletions to a specific user.
+	UserID string
+
+	// AgentID filters deletions to a specific agent.
 	AgentID string
 }

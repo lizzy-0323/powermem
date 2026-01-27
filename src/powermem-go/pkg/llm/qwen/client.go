@@ -1,3 +1,7 @@
+// Package qwen provides Qwen LLM implementation using Alibaba Cloud DashScope API.
+//
+// Qwen is a large language model developed by Alibaba Cloud. This package
+// implements the llm.Provider interface for text generation using DashScope API.
 package qwen
 
 import (
@@ -13,33 +17,46 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/llm"
 )
 
-// Client Qwen LLM 客户端
-// 实现了 llm.Provider 接口，提供基于阿里云 DashScope API 的文本生成功能
+// Client implements llm.Provider using Alibaba Cloud DashScope API.
+//
+// It provides text generation capabilities based on Qwen models.
 type Client struct {
-	client  *http.Client
-	apiKey  string
-	model   string
+	// client is the HTTP client for API requests.
+	client *http.Client
+
+	// apiKey is the DashScope API key.
+	apiKey string
+
+	// model is the Qwen model name to use.
+	model string
+
+	// baseURL is the base URL for DashScope API.
 	baseURL string
 }
 
-// Config Qwen LLM 配置
-// APIKey: DashScope API 密钥（必需）
-// Model: 使用的模型名称，默认为 "qwen-plus"
-// BaseURL: API 基础 URL，默认为 DashScope 官方地址
-// HTTPClient: 自定义 HTTP 客户端，如果为 nil 则使用默认客户端
+// Config contains configuration for creating a Qwen LLM client.
 type Config struct {
-	APIKey     string
-	Model      string
-	BaseURL    string
+	// APIKey is the DashScope API key (required).
+	APIKey string
+
+	// Model is the model name to use (default: "qwen-plus").
+	Model string
+
+	// BaseURL is the API base URL (default: DashScope official address).
+	BaseURL string
+
+	// HTTPClient is a custom HTTP client (uses default if nil).
 	HTTPClient *http.Client
 }
 
-// NewClient 创建新的 Qwen LLM 客户端
-// 参数:
-//   - cfg: Qwen 配置，包含 APIKey、Model、BaseURL 等
-// 返回:
-//   - *Client: Qwen 客户端实例
-//   - error: 如果配置无效（如缺少 APIKey）或初始化失败则返回错误
+// NewClient creates a new Qwen LLM client.
+//
+// Parameters:
+//   - cfg: Qwen configuration containing APIKey, Model, BaseURL, etc.
+//
+// Returns:
+//   - *Client: Qwen client instance
+//   - error: Error if configuration is invalid (e.g., missing APIKey) or initialization fails
 func NewClient(cfg *Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("API key is required")
@@ -70,14 +87,16 @@ func NewClient(cfg *Config) (*Client, error) {
 	}, nil
 }
 
-// Generate 根据提示词生成文本
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - prompt: 用户输入的提示词
-//   - opts: 可选的生成参数（temperature, max_tokens, top_p 等）
-// 返回:
-//   - string: 生成的文本内容
-//   - error: 如果生成失败则返回错误
+// Generate generates text from a prompt.
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - prompt: User input prompt
+//   - opts: Optional generation parameters (temperature, max_tokens, top_p, etc.)
+//
+// Returns:
+//   - string: Generated text content
+//   - error: Error if generation fails
 func (c *Client) Generate(ctx context.Context, prompt string, opts ...llm.GenerateOption) (string, error) {
 	messages := []llm.Message{
 		{Role: "user", Content: prompt},
@@ -85,19 +104,23 @@ func (c *Client) Generate(ctx context.Context, prompt string, opts ...llm.Genera
 	return c.GenerateWithMessages(ctx, messages, opts...)
 }
 
-// GenerateWithMessages 使用消息历史生成文本
-// 支持多轮对话，可以传入完整的消息历史（包括 system、user、assistant 消息）
-// 参数:
-//   - ctx: 上下文，用于控制请求生命周期
-//   - messages: 消息历史列表，每个消息包含 role 和 content
-//   - opts: 可选的生成参数（temperature, max_tokens, top_p 等）
-// 返回:
-//   - string: 生成的文本内容
-//   - error: 如果生成失败则返回错误
+// GenerateWithMessages generates text from a conversation history.
+//
+// Supports multi-turn conversations with complete message history
+// (including system, user, and assistant messages).
+//
+// Parameters:
+//   - ctx: Context for controlling request lifecycle
+//   - messages: Message history list, each message contains role and content
+//   - opts: Optional generation parameters (temperature, max_tokens, top_p, etc.)
+//
+// Returns:
+//   - string: Generated text content
+//   - error: Error if generation fails
 func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Message, opts ...llm.GenerateOption) (string, error) {
 	options := llm.ApplyGenerateOptions(opts)
 
-	// 转换消息格式
+	// Convert message format
 	chatMessages := make([]map[string]string, len(messages))
 	for i, msg := range messages {
 		chatMessages[i] = map[string]string{
@@ -106,7 +129,7 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 		}
 	}
 
-	// 构建请求
+	// Build request
 	reqBody := map[string]interface{}{
 		"model": c.model,
 		"input": map[string]interface{}{"messages": chatMessages},
@@ -126,7 +149,7 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	// 创建 HTTP 请求
+	// Create HTTP request
 	url := fmt.Sprintf("%s/services/aigc/text-generation/generation", c.baseURL)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -136,19 +159,19 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
-	// 发送请求
+	// Send request
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 解析响应
+	// Parse response
 	var response struct {
 		Output struct {
 			Choices []struct {
@@ -170,10 +193,12 @@ func (c *Client) GenerateWithMessages(ctx context.Context, messages []llm.Messag
 	return response.Output.Choices[0].Message.Content, nil
 }
 
-// Close 关闭客户端连接
-// HTTP 客户端不需要显式关闭，此方法为接口兼容性保留
-// 返回:
-//   - error: 始终返回 nil
+// Close closes the client connection.
+//
+// HTTP clients do not need explicit closing, this method is retained for interface compatibility.
+//
+// Returns:
+//   - error: Always returns nil
 func (c *Client) Close() error {
 	return nil
 }

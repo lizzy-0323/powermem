@@ -1,3 +1,8 @@
+// Package sqlite provides SQLite implementation for vector storage.
+//
+// SQLite is a lightweight, file-based database suitable for local development
+// and small-scale applications. Vectors are stored as JSON strings in TEXT fields,
+// and similarity search uses in-memory cosine similarity calculation.
 package sqlite
 
 import (
@@ -12,28 +17,45 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/storage"
 )
 
-// Client SQLite 客户端
+// Client implements VectorStore using SQLite as the backend.
 type Client struct {
-	db             *sql.DB
+	// db is the SQLite database connection.
+	db *sql.DB
+
+	// collectionName is the name of the table storing memories.
 	collectionName string
-	dimensions     int
+
+	// dimensions is the dimension of embedding vectors.
+	dimensions int
 }
 
-// Config SQLite 配置
+// Config contains configuration for creating a SQLite VectorStore.
 type Config struct {
-	DBPath             string
-	CollectionName     string
+	// DBPath is the path to the SQLite database file.
+	DBPath string
+
+	// CollectionName is the name of the table to use.
+	CollectionName string
+
+	// EmbeddingModelDims is the dimension of embedding vectors.
 	EmbeddingModelDims int
 }
 
-// NewClient 创建新的 SQLite 客户端
+// NewClient creates a new SQLite VectorStore client.
+//
+// Parameters:
+//   - cfg: Configuration containing database path, table name, and embedding dimensions
+//
+// Returns:
+//   - *Client: The SQLite client instance
+//   - error: Error if database connection or table creation fails
 func NewClient(cfg *Config) (*Client, error) {
 	db, err := sql.Open("sqlite3", cfg.DBPath+"?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("NewSQLiteClient: %w", err)
 	}
 
-	// 测试连接
+	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("NewSQLiteClient: %w", err)
 	}
@@ -44,7 +66,7 @@ func NewClient(cfg *Config) (*Client, error) {
 		dimensions:     cfg.EmbeddingModelDims,
 	}
 
-	// 初始化表结构
+	// Initialize table structure
 	if err := client.initTables(context.Background()); err != nil {
 		return nil, err
 	}
@@ -52,9 +74,10 @@ func NewClient(cfg *Config) (*Client, error) {
 	return client, nil
 }
 
-// initTables 初始化数据库表
+// initTables initializes the database table structure.
+//
+// SQLite stores vectors as JSON strings in TEXT fields.
 func (c *Client) initTables(ctx context.Context) error {
-	// SQLite 使用 BLOB 存储向量（JSON 格式）
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			id INTEGER PRIMARY KEY,
@@ -75,7 +98,7 @@ func (c *Client) initTables(ctx context.Context) error {
 		return fmt.Errorf("initTables: %w", err)
 	}
 
-	// 创建索引
+	// Create index
 	indexQuery := fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS idx_%s_user_agent ON %s(user_id, agent_id)
 	`, c.collectionName, c.collectionName)
@@ -87,7 +110,9 @@ func (c *Client) initTables(ctx context.Context) error {
 	return nil
 }
 
-// Insert 插入记忆
+// Insert inserts a memory into the SQLite database.
+//
+// Vectors are stored as JSON strings in TEXT fields.
 func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s 
@@ -123,11 +148,14 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	return nil
 }
 
-// Search 向量搜索（使用余弦相似度）
+// Search performs vector similarity search using cosine similarity.
+//
+// SQLite does not have native vector operations, so similarity is calculated
+// in memory after loading all matching records.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, opts.Filters)
 
-	// SQLite 需要手动计算余弦相似度
+	// SQLite requires manual cosine similarity calculation
 	query := fmt.Sprintf(`
 		SELECT 
 			id, user_id, agent_id, content, embedding, metadata,
@@ -141,7 +169,7 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 	if err != nil {
 		return nil, fmt.Errorf("Search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var memories []*storage.Memory
 	for rows.Next() {
@@ -150,7 +178,7 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 			return nil, err
 		}
 
-		// 计算余弦相似度
+		// Calculate cosine similarity
 		score := cosineSimilarity(embedding, memory.Embedding)
 		memory.Score = score
 
@@ -163,13 +191,13 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		return nil, err
 	}
 
-	// 按分数排序并限制数量
+	// Sort by score and limit results
 	memories = sortByScore(memories, opts.Limit)
 
 	return memories, nil
 }
 
-// Get 根据 ID 获取记忆
+// Get retrieves a memory by ID.
 func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, content, embedding, metadata,
@@ -191,7 +219,7 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update 更新记忆
+// Update updates a memory.
 func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
 	embeddingJSON, err := json.Marshal(embedding)
 	if err != nil {
@@ -221,7 +249,7 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 	return c.Get(ctx, id)
 }
 
-// Delete 删除记忆
+// Delete deletes a memory by ID.
 func (c *Client) Delete(ctx context.Context, id int64) error {
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", c.collectionName)
 
@@ -242,7 +270,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetAll 获取所有记忆
+// GetAll retrieves all memories with optional filtering and pagination.
 func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*storage.Memory, error) {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -261,7 +289,7 @@ func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*st
 	if err != nil {
 		return nil, fmt.Errorf("GetAll: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var memories []*storage.Memory
 	for rows.Next() {
@@ -275,7 +303,7 @@ func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*st
 	return memories, nil
 }
 
-// DeleteAll 删除所有记忆
+// DeleteAll deletes all memories matching the given filters.
 func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) error {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
@@ -289,7 +317,7 @@ func (c *Client) DeleteAll(ctx context.Context, opts *storage.DeleteAllOptions) 
 	return nil
 }
 
-// Close 关闭数据库连接
+// Close closes the database connection.
 func (c *Client) Close() error {
 	if c.db != nil {
 		return c.db.Close()
@@ -297,13 +325,16 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// CreateIndex 创建向量索引（SQLite 不支持向量索引，返回 nil）
+// CreateIndex creates a vector index.
+//
+// SQLite does not support vector indexes, so this method is a no-op.
+// Similarity search uses full table scan with in-memory calculation.
 func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexConfig) error {
-	// SQLite 不支持向量索引，使用全表扫描
+	// SQLite does not support vector indexes, uses full table scan
 	return nil
 }
 
-// scanMemory 扫描记忆
+// scanMemory scans a memory from a database row or rows.
 func (c *Client) scanMemory(scanner interface{}) (*storage.Memory, error) {
 	var memory storage.Memory
 	var embeddingStr string
@@ -346,19 +377,19 @@ func (c *Client) scanMemory(scanner interface{}) (*storage.Memory, error) {
 		return nil, err
 	}
 
-	// 解析 embedding
+	// Parse embedding
 	if err := json.Unmarshal([]byte(embeddingStr), &memory.Embedding); err != nil {
 		return nil, fmt.Errorf("parse embedding: %w", err)
 	}
 
-	// 解析 metadata
+	// Parse metadata
 	if metadataStr != "" {
 		if err := json.Unmarshal([]byte(metadataStr), &memory.Metadata); err != nil {
 			return nil, fmt.Errorf("parse metadata: %w", err)
 		}
 	}
 
-	// 处理 last_accessed_at
+	// Handle last_accessed_at
 	if lastAccessedAt.Valid {
 		memory.LastAccessedAt = &lastAccessedAt.Time
 	}
@@ -366,7 +397,7 @@ func (c *Client) scanMemory(scanner interface{}) (*storage.Memory, error) {
 	return &memory, nil
 }
 
-// cosineSimilarity 计算余弦相似度
+// cosineSimilarity calculates the cosine similarity between two vectors.
 func cosineSimilarity(a, b []float64) float64 {
 	if len(a) != len(b) {
 		return 0
@@ -386,9 +417,10 @@ func cosineSimilarity(a, b []float64) float64 {
 	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
 }
 
-// sortByScore 按分数排序并限制数量
+// sortByScore sorts memories by score (descending) and limits the number of results.
+//
+// Uses a simple bubble sort which is sufficient for small datasets.
 func sortByScore(memories []*storage.Memory, limit int) []*storage.Memory {
-	// 简单的冒泡排序（对于小数据集足够）
 	n := len(memories)
 	for i := 0; i < n-1; i++ {
 		for j := 0; j < n-i-1; j++ {

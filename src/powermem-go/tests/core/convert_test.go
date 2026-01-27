@@ -10,11 +10,11 @@ import (
 	"github.com/oceanbase/powermem-go/pkg/storage"
 )
 
-// 注意：convert.go 中的函数都是私有的，无法直接测试
-// 这些函数会在实际的 Memory 操作中被间接测试
+// Note: Functions in convert.go are private and cannot be tested directly
+// These functions will be indirectly tested in actual Memory operations
 func TestConvertMemoryTypes(t *testing.T) {
-	// 测试类型转换的正确性通过实际使用来验证
-	// 这里只验证类型定义的一致性
+	// Test correctness of type conversion through actual usage
+	// Here we only verify consistency of type definitions
 	
 	coreMem := &powermem.Memory{
 		ID:                12345,
@@ -42,7 +42,7 @@ func TestConvertMemoryTypes(t *testing.T) {
 		Score:             coreMem.Score,
 	}
 	
-	// 验证字段一致性
+	// Verify field consistency
 	assert.Equal(t, coreMem.ID, storageMem.ID)
 	assert.Equal(t, coreMem.UserID, storageMem.UserID)
 	assert.Equal(t, coreMem.AgentID, storageMem.AgentID)

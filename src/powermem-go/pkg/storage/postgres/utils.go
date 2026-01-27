@@ -5,11 +5,16 @@ import (
 	"strings"
 )
 
-// buildWhereClause 构建 WHERE 子句（修复 DeleteAll）
+// buildWhereClause builds a WHERE clause starting from $1.
 func buildWhereClause(userID, agentID string, filters map[string]interface{}) (string, []interface{}) {
+	return buildWhereClauseWithOffset(userID, agentID, filters, 1)
+}
+
+// buildWhereClauseWithOffset builds a WHERE clause starting from a specific parameter index.
+func buildWhereClauseWithOffset(userID, agentID string, filters map[string]interface{}, startIndex int) (string, []interface{}) {
 	conditions := []string{}
 	args := []interface{}{}
-	argIndex := 1
+	argIndex := startIndex
 
 	if userID != "" {
 		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argIndex))
@@ -22,6 +27,9 @@ func buildWhereClause(userID, agentID string, filters map[string]interface{}) (s
 		args = append(args, agentID)
 		argIndex++
 	}
+
+	// Note: Currently not processing filters map for metadata conditions
+	// This would require JSON operations in PostgreSQL
 
 	if len(conditions) == 0 {
 		return "", args

@@ -43,15 +43,28 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Printf("Warning: failed to close client: %v", err)
+		}
+	}()
 
-	fmt.Println("✓ Memory initialized successfully!\n")
+	fmt.Println("✓ Memory initialized successfully!")
 
 	ctx := context.Background()
 	userID := "user123"
 
-	// 添加记忆
-	fmt.Println("Adding memories...")
+	// Clean up any existing memories for this user (optional, for demo purposes)
+	fmt.Println("\nCleaning up existing memories...")
+	err = client.DeleteAll(ctx, powermem.WithUserIDForDeleteAll(userID))
+	if err != nil {
+		log.Printf("Warning: failed to clean up: %v", err)
+	} else {
+		fmt.Println("✓ Cleanup completed!")
+	}
+
+	// Add memories
+	fmt.Println("\nAdding memories...")
 	memory1, err := client.Add(ctx, "User likes coffee",
 		powermem.WithUserID(userID),
 	)
@@ -75,7 +88,7 @@ func main() {
 		log.Fatalf("Failed to add memory: %v", err)
 	}
 	fmt.Printf("✓ Added: %s (ID: %d)\n", memory3.Content, memory3.ID)
-	fmt.Println("✓ Memories added!\n")
+	fmt.Println("✓ Memories added!")
 
 	// 搜索记忆
 	fmt.Println("Searching memories...")

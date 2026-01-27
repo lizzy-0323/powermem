@@ -44,9 +44,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create async client: %v", err)
 	}
-	defer asyncClient.Close()
+	defer func() {
+		if err := asyncClient.Close(); err != nil {
+			log.Printf("Warning: failed to close async client: %v", err)
+		}
+	}()
 
-	fmt.Println("✓ Async memory initialized successfully!\n")
+	fmt.Println("✓ Async memory initialized successfully!")
 
 	ctx := context.Background()
 	userID := "user123"
