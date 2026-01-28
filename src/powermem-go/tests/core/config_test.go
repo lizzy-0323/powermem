@@ -19,28 +19,28 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		{
 			name: "valid config with SQLite",
 			envVars: map[string]string{
-				"VECTOR_STORE_PROVIDER": "sqlite",
-				"VECTOR_STORE_DB_PATH":  "./test.db",
-				"LLM_PROVIDER":          "openai",
-				"LLM_API_KEY":           "test-key",
-				"LLM_MODEL":             "gpt-4",
-				"EMBEDDING_PROVIDER":    "openai",
-				"EMBEDDING_API_KEY":     "test-key",
-				"EMBEDDING_MODEL":       "text-embedding-3-small",
+				"DATABASE_PROVIDER": "sqlite",
+				"SQLITE_PATH":       "./test.db",
+				"LLM_PROVIDER":      "openai",
+				"LLM_API_KEY":       "test-key",
+				"LLM_MODEL":         "gpt-4",
+				"EMBEDDING_PROVIDER": "openai",
+				"EMBEDDING_API_KEY":  "test-key",
+				"EMBEDDING_MODEL":    "text-embedding-3-small",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid config with Qwen",
 			envVars: map[string]string{
-				"VECTOR_STORE_PROVIDER": "sqlite",
-				"VECTOR_STORE_DB_PATH":  "./test.db",
-				"LLM_PROVIDER":          "qwen",
-				"LLM_API_KEY":           "test-key",
-				"LLM_MODEL":             "qwen-plus",
-				"EMBEDDING_PROVIDER":    "qwen",
-				"EMBEDDING_API_KEY":     "test-key",
-				"EMBEDDING_MODEL":       "text-embedding-v4",
+				"DATABASE_PROVIDER": "sqlite",
+				"SQLITE_PATH":       "./test.db",
+				"LLM_PROVIDER":      "qwen",
+				"LLM_API_KEY":       "test-key",
+				"LLM_MODEL":         "qwen-plus",
+				"EMBEDDING_PROVIDER": "qwen",
+				"EMBEDDING_API_KEY":  "test-key",
+				"EMBEDDING_MODEL":    "text-embedding-v4",
 			},
 			wantErr: false,
 		},
@@ -65,7 +65,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, config)
-				assert.Equal(t, tt.envVars["VECTOR_STORE_PROVIDER"], config.VectorStore.Provider)
+				assert.Equal(t, tt.envVars["DATABASE_PROVIDER"], config.VectorStore.Provider)
 				assert.Equal(t, tt.envVars["LLM_PROVIDER"], config.LLM.Provider)
 				assert.Equal(t, tt.envVars["EMBEDDING_PROVIDER"], config.Embedder.Provider)
 			}

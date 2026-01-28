@@ -59,19 +59,23 @@ func NewClient(cfg *Config) (*Client, error) {
 }
 
 // initTables initializes the database table.
+// Compatible with Python SDK table structure
 func (c *Client) initTables(ctx context.Context) error {
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			id BIGINT PRIMARY KEY,
-			user_id VARCHAR(255) NOT NULL,
-			agent_id VARCHAR(255),
-			content LONGTEXT NOT NULL,
-			embedding VECTOR(%d) NOT NULL,
+			embedding VECTOR(%d),
+			document LONGTEXT,
 			metadata JSON,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			retention_strength FLOAT DEFAULT 1.0,
-			last_accessed_at DATETIME,
+			user_id VARCHAR(128),
+			agent_id VARCHAR(128),
+			run_id VARCHAR(128),
+			actor_id VARCHAR(128),
+			hash VARCHAR(32),
+			created_at VARCHAR(128),
+			updated_at VARCHAR(128),
+			category VARCHAR(64),
+			fulltext_content LONGTEXT,
 			INDEX idx_user_agent (user_id, agent_id)
 		)
 	`, c.collectionName, c.config.EmbeddingModelDims)
@@ -85,19 +89,34 @@ func (c *Client) initTables(ctx context.Context) error {
 }
 
 // Insert inserts a memory.
+// Compatible with Python SDK: uses 'document' field instead of 'content'
 func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s 
-		(id, user_id, agent_id, content, embedding, metadata, created_at, retention_strength)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		(id, user_id, agent_id, document, embedding, metadata, created_at, updated_at, hash)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, c.collectionName)
 
 	vectorStr := vectorToString(memory.Embedding)
 
-	metadataJSON, err := json.Marshal(memory.Metadata)
+	// Add retention_strength to metadata if it exists
+	metadataMap := memory.Metadata
+	if metadataMap == nil {
+		metadataMap = make(map[string]interface{})
+	}
+	if memory.RetentionStrength > 0 {
+		metadataMap["retention_strength"] = memory.RetentionStrength
+	}
+
+	metadataJSON, err := json.Marshal(metadataMap)
 	if err != nil {
 		return fmt.Errorf("Insert: %w", err)
 	}
+
+	// Generate hash for content (compatible with Python SDK)
+	hash := generateHash(memory.Content)
+	
+	now := time.Now().Format(time.RFC3339)
 
 	_, err = c.db.ExecContext(ctx, query,
 		memory.ID,
@@ -106,8 +125,9 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 		memory.Content,
 		vectorStr,
 		metadataJSON,
-		time.Now(),
-		memory.RetentionStrength,
+		now,
+		now,
+		hash,
 	)
 
 	if err != nil {
@@ -118,6 +138,7 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 }
 
 // Search performs vector search.
+// Compatible with Python SDK: uses 'document' field
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
 	queryVectorStr := vectorToString(embedding)
 
@@ -125,8 +146,8 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 
 	query := fmt.Sprintf(`
 		SELECT 
-			id, user_id, agent_id, content, embedding, metadata,
-			created_at, updated_at, retention_strength, last_accessed_at,
+			id, user_id, agent_id, run_id, document, embedding, metadata,
+			created_at, updated_at, hash,
 			cosine_distance(embedding, ?) as distance
 		FROM %s
 		%s
@@ -148,10 +169,11 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 }
 
 // Get retrieves a memory by ID.
+// Compatible with Python SDK: uses 'document' field
 func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	query := fmt.Sprintf(`
-		SELECT id, user_id, agent_id, content, embedding, metadata,
-		       created_at, updated_at, retention_strength, last_accessed_at
+		SELECT id, user_id, agent_id, run_id, document, embedding, metadata,
+		       created_at, updated_at, hash
 		FROM %s
 		WHERE id = ?
 	`, c.collectionName)
@@ -170,16 +192,19 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 }
 
 // Update updates a memory.
+// Compatible with Python SDK: uses 'document' field
 func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
 	vectorStr := vectorToString(embedding)
+	hash := generateHash(content)
+	now := time.Now().Format(time.RFC3339)
 
 	query := fmt.Sprintf(`
 		UPDATE %s
-		SET content = ?, embedding = ?, updated_at = ?
+		SET document = ?, embedding = ?, updated_at = ?, hash = ?
 		WHERE id = ?
 	`, c.collectionName)
 
-	result, err := c.db.ExecContext(ctx, query, content, vectorStr, time.Now(), id)
+	result, err := c.db.ExecContext(ctx, query, content, vectorStr, now, hash, id)
 	if err != nil {
 		return nil, fmt.Errorf("Update: %w", err)
 	}
@@ -219,15 +244,16 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 }
 
 // GetAll retrieves all memories.
+// Compatible with Python SDK: uses 'document' field
 func (c *Client) GetAll(ctx context.Context, opts *storage.GetAllOptions) ([]*storage.Memory, error) {
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, nil)
 
 	query := fmt.Sprintf(`
-		SELECT id, user_id, agent_id, content, embedding, metadata,
-		       created_at, updated_at, retention_strength, last_accessed_at
+		SELECT id, user_id, agent_id, run_id, document, embedding, metadata,
+		       created_at, updated_at, hash
 		FROM %s
 		%s
-		ORDER BY created_at DESC
+		ORDER BY id DESC
 		LIMIT ? OFFSET ?
 	`, c.collectionName, whereClause)
 
@@ -306,26 +332,40 @@ func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexCon
 }
 
 // scanMemory scans a single memory.
+// Compatible with Python SDK: reads from 'document' field
 func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	var memory storage.Memory
 	var embeddingStr string
 	var metadataJSON []byte
-	var lastAccessedAt sql.NullTime
+	var userID sql.NullString
+	var agentID sql.NullString
+	var runID sql.NullString
+	var hash sql.NullString
+	var createdAt sql.NullString
+	var updatedAt sql.NullString
 
 	err := row.Scan(
 		&memory.ID,
-		&memory.UserID,
-		&memory.AgentID,
+		&userID,
+		&agentID,
+		&runID,
 		&memory.Content,
 		&embeddingStr,
 		&metadataJSON,
-		&memory.CreatedAt,
-		&memory.UpdatedAt,
-		&memory.RetentionStrength,
-		&lastAccessedAt,
+		&createdAt,
+		&updatedAt,
+		&hash,
 	)
 	if err != nil {
 		return nil, err
+	}
+	
+	// Handle nullable fields
+	if userID.Valid {
+		memory.UserID = userID.String
+	}
+	if agentID.Valid {
+		memory.AgentID = agentID.String
 	}
 
 	// Parse embedding
@@ -342,17 +382,32 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 		if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 			return nil, err
 		}
+		
+		// Extract retention_strength from metadata if present
+		if memory.Metadata != nil {
+			if rs, ok := memory.Metadata["retention_strength"].(float64); ok {
+				memory.RetentionStrength = rs
+			}
+		}
 	}
 
-	// Handle last_accessed_at
-	if lastAccessedAt.Valid {
-		memory.LastAccessedAt = &lastAccessedAt.Time
+	// Parse timestamps
+	if createdAt.Valid {
+		if t, err := time.Parse(time.RFC3339, createdAt.String); err == nil {
+			memory.CreatedAt = t
+		}
+	}
+	if updatedAt.Valid {
+		if t, err := time.Parse(time.RFC3339, updatedAt.String); err == nil {
+			memory.UpdatedAt = t
+		}
 	}
 
 	return &memory, nil
 }
 
 // scanMemories scans multiple memories.
+// Compatible with Python SDK: reads from 'document' field
 func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory, error) {
 	var memories []*storage.Memory
 
@@ -360,21 +415,26 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 		var memory storage.Memory
 		var embeddingStr string
 		var metadataJSON []byte
-		var lastAccessedAt sql.NullTime
+		var userID sql.NullString
+		var agentID sql.NullString
+		var runID sql.NullString
+		var hash sql.NullString
+		var createdAt sql.NullString
+		var updatedAt sql.NullString
 		var distance float64
 
 		if hasScore {
 			err := rows.Scan(
 				&memory.ID,
-				&memory.UserID,
-				&memory.AgentID,
+				&userID,
+				&agentID,
+				&runID,
 				&memory.Content,
 				&embeddingStr,
 				&metadataJSON,
-				&memory.CreatedAt,
-				&memory.UpdatedAt,
-				&memory.RetentionStrength,
-				&lastAccessedAt,
+				&createdAt,
+				&updatedAt,
+				&hash,
 				&distance,
 			)
 			if err != nil {
@@ -385,19 +445,27 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 		} else {
 			err := rows.Scan(
 				&memory.ID,
-				&memory.UserID,
-				&memory.AgentID,
+				&userID,
+				&agentID,
+				&runID,
 				&memory.Content,
 				&embeddingStr,
 				&metadataJSON,
-				&memory.CreatedAt,
-				&memory.UpdatedAt,
-				&memory.RetentionStrength,
-				&lastAccessedAt,
+				&createdAt,
+				&updatedAt,
+				&hash,
 			)
 			if err != nil {
 				return nil, err
 			}
+		}
+		
+		// Handle nullable fields
+		if userID.Valid {
+			memory.UserID = userID.String
+		}
+		if agentID.Valid {
+			memory.AgentID = agentID.String
 		}
 
 		// Parse embedding
@@ -414,11 +482,25 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 				return nil, err
 			}
+			
+			// Extract retention_strength from metadata if present
+			if memory.Metadata != nil {
+				if rs, ok := memory.Metadata["retention_strength"].(float64); ok {
+					memory.RetentionStrength = rs
+				}
+			}
 		}
 
-		// Handle last_accessed_at
-		if lastAccessedAt.Valid {
-			memory.LastAccessedAt = &lastAccessedAt.Time
+		// Parse timestamps
+		if createdAt.Valid {
+			if t, err := time.Parse(time.RFC3339, createdAt.String); err == nil {
+				memory.CreatedAt = t
+			}
+		}
+		if updatedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, updatedAt.String); err == nil {
+				memory.UpdatedAt = t
+			}
 		}
 
 		memories = append(memories, &memory)

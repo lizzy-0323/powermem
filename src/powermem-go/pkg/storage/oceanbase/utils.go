@@ -1,6 +1,8 @@
 package oceanbase
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -70,4 +72,11 @@ func buildWhereClause(userID, agentID string, filters map[string]interface{}) (s
 	}
 
 	return "WHERE " + strings.Join(conditions, " AND "), args
+}
+
+// generateHash generates an MD5 hash for content.
+// Compatible with Python SDK's hash generation
+func generateHash(content string) string {
+	hash := md5.Sum([]byte(content))
+	return hex.EncodeToString(hash[:])
 }

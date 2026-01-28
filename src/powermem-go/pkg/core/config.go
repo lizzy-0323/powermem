@@ -241,7 +241,10 @@ type AgentMemoryConfig struct {
 //   3. Parses environment variables into a Config struct
 //
 // Supported environment variables:
-//   - VECTOR_STORE_PROVIDER, VECTOR_STORE_* (for vector store config)
+//   - DATABASE_PROVIDER (sqlite, oceanbase, postgres)
+//   - OCEANBASE_HOST, OCEANBASE_PORT, OCEANBASE_USER, OCEANBASE_PASSWORD, etc.
+//   - SQLITE_PATH, SQLITE_COLLECTION, etc.
+//   - POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, etc.
 //   - LLM_PROVIDER, LLM_API_KEY, LLM_MODEL, LLM_BASE_URL
 //   - EMBEDDING_PROVIDER, EMBEDDING_API_KEY, EMBEDDING_MODEL, EMBEDDING_BASE_URL
 //   - INTELLIGENCE_ENABLED (to enable intelligent memory)
@@ -265,44 +268,50 @@ func LoadConfigFromEnv() (*Config, error) {
 		_ = godotenv.Load()
 	}
 
-	// Get vector store provider
-	provider := getEnvOrDefault("VECTOR_STORE_PROVIDER", "sqlite")
+	// Get database provider (unified with Python SDK naming)
+	provider := getEnvOrDefault("DATABASE_PROVIDER", "sqlite")
 
 	// Build different configurations based on provider
 	vectorStoreConfig := make(map[string]interface{})
 
 	switch provider {
 	case "oceanbase":
-		port, _ := strconv.Atoi(getEnvOrDefault("VECTOR_STORE_PORT", "2881"))
-		dims, _ := strconv.Atoi(getEnvOrDefault("VECTOR_STORE_EMBEDDING_MODEL_DIMS", "1536"))
+		// Use Python SDK compatible environment variables
+		port, _ := strconv.Atoi(getEnvOrDefault("OCEANBASE_PORT", "2881"))
+		dims, _ := strconv.Atoi(getEnvOrDefault("OCEANBASE_EMBEDDING_MODEL_DIMS", "1536"))
+		
 		vectorStoreConfig = map[string]interface{}{
-			"host":                 getEnvOrDefault("VECTOR_STORE_HOST", "127.0.0.1"),
+			"host":                 getEnvOrDefault("OCEANBASE_HOST", "127.0.0.1"),
 			"port":                 port,
-			"user":                 getEnvOrDefault("VECTOR_STORE_USER", "root@sys"),
-			"password":             os.Getenv("VECTOR_STORE_PASSWORD"),
-			"db_name":              getEnvOrDefault("VECTOR_STORE_DB", "powermem"),
-			"collection_name":      getEnvOrDefault("VECTOR_STORE_COLLECTION", "memories"),
+			"user":                 getEnvOrDefault("OCEANBASE_USER", "root@sys"),
+			"password":             os.Getenv("OCEANBASE_PASSWORD"),
+			"db_name":              getEnvOrDefault("OCEANBASE_DATABASE", "powermem"),
+			"collection_name":      getEnvOrDefault("OCEANBASE_COLLECTION", "memories"),
 			"embedding_model_dims": dims,
 		}
 	case "sqlite":
-		dims, _ := strconv.Atoi(getEnvOrDefault("VECTOR_STORE_EMBEDDING_MODEL_DIMS", "1536"))
+		// Use Python SDK compatible environment variables
+		dims, _ := strconv.Atoi(getEnvOrDefault("SQLITE_EMBEDDING_MODEL_DIMS", "1536"))
+		
 		vectorStoreConfig = map[string]interface{}{
-			"db_path":              getEnvOrDefault("VECTOR_STORE_DB_PATH", "./powermem.db"),
-			"collection_name":      getEnvOrDefault("VECTOR_STORE_COLLECTION", "memories"),
+			"db_path":              getEnvOrDefault("SQLITE_PATH", "./powermem.db"),
+			"collection_name":      getEnvOrDefault("SQLITE_COLLECTION", "memories"),
 			"embedding_model_dims": dims,
 		}
 	case "postgres":
-		port, _ := strconv.Atoi(getEnvOrDefault("VECTOR_STORE_PORT", "5432"))
-		dims, _ := strconv.Atoi(getEnvOrDefault("VECTOR_STORE_EMBEDDING_MODEL_DIMS", "1536"))
+		// Use Python SDK compatible environment variables
+		port, _ := strconv.Atoi(getEnvOrDefault("POSTGRES_PORT", "5432"))
+		dims, _ := strconv.Atoi(getEnvOrDefault("POSTGRES_EMBEDDING_MODEL_DIMS", "1536"))
+		
 		vectorStoreConfig = map[string]interface{}{
-			"host":                 getEnvOrDefault("VECTOR_STORE_HOST", "localhost"),
+			"host":                 getEnvOrDefault("POSTGRES_HOST", "localhost"),
 			"port":                 port,
-			"user":                 getEnvOrDefault("VECTOR_STORE_USER", "postgres"),
-			"password":             os.Getenv("VECTOR_STORE_PASSWORD"),
-			"db_name":              getEnvOrDefault("VECTOR_STORE_DB", "powermem"),
-			"collection_name":      getEnvOrDefault("VECTOR_STORE_COLLECTION", "memories"),
+			"user":                 getEnvOrDefault("POSTGRES_USER", "postgres"),
+			"password":             os.Getenv("POSTGRES_PASSWORD"),
+			"db_name":              getEnvOrDefault("POSTGRES_DATABASE", "powermem"),
+			"collection_name":      getEnvOrDefault("POSTGRES_COLLECTION", "memories"),
 			"embedding_model_dims": dims,
-			"ssl_mode":             getEnvOrDefault("VECTOR_STORE_SSL_MODE", "disable"),
+			"ssl_mode":             getEnvOrDefault("POSTGRES_SSLMODE", "disable"),
 		}
 	}
 
