@@ -17,11 +17,11 @@ import (
 //   - FactExtractor: Extracts facts from messages
 //
 // The manager processes memories through the following pipeline:
-//   1. Extract facts from messages
-//   2. Evaluate importance of each fact
-//   3. Classify memory type (working/short-term/long-term)
-//   4. Generate review schedule
-//   5. Apply Ebbinghaus decay and reinforcement
+//  1. Extract facts from messages
+//  2. Evaluate importance of each fact
+//  3. Classify memory type (working/short-term/long-term)
+//  4. Generate review schedule
+//  5. Apply Ebbinghaus decay and reinforcement
 //
 // Example usage:
 //
@@ -74,10 +74,10 @@ func DefaultConfig() *Config {
 	return &Config{
 		DecayRate:           0.1,
 		ReinforcementFactor: 0.3,
-		WorkingThreshold:   0.3,
+		WorkingThreshold:    0.3,
 		ShortTermThreshold:  0.6,
 		LongTermThreshold:   0.8,
-		InitialRetention:   1.0,
+		InitialRetention:    1.0,
 		FallbackToSimpleAdd: false,
 	}
 }
@@ -108,23 +108,23 @@ func NewIntelligentMemoryManager(llm llm.Provider, config *Config) *IntelligentM
 
 	return &IntelligentMemoryManager{
 		importanceEvaluator: importanceEvaluator,
-		ebbinghausManager:    ebbinghausManager,
-		factExtractor:        factExtractor,
-		config:               config,
+		ebbinghausManager:   ebbinghausManager,
+		factExtractor:       factExtractor,
+		config:              config,
 	}
 }
 
 // ProcessMetadata processes memory metadata with intelligent analysis.
 //
 // This method:
-//   1. Evaluates importance of the content
-//   2. Determines memory type based on importance
-//   3. Generates intelligence metadata including:
-//      - Importance score
-//      - Memory type (working/short-term/long-term)
-//      - Initial retention strength
-//      - Review schedule
-//      - Decay rate
+//  1. Evaluates importance of the content
+//  2. Determines memory type based on importance
+//  3. Generates intelligence metadata including:
+//     - Importance score
+//     - Memory type (working/short-term/long-term)
+//     - Initial retention strength
+//     - Review schedule
+//     - Decay rate
 //
 // Parameters:
 //   - ctx: Context for cancellation
@@ -168,15 +168,15 @@ func (m *IntelligentMemoryManager) ProcessMetadata(
 
 	// Build intelligence metadata
 	intelligenceData := map[string]interface{}{
-		"importance_score":  importanceScore,
-		"memory_type":        memoryType,
-		"initial_retention":  initialRetention,
-		"current_retention":  initialRetention,
-		"decay_rate":         decayRate,
-		"review_schedule":    reviewSchedule,
-		"last_reviewed":      time.Now(),
-		"review_count":      0,
-		"access_count":       0,
+		"importance_score":     importanceScore,
+		"memory_type":          memoryType,
+		"initial_retention":    initialRetention,
+		"current_retention":    initialRetention,
+		"decay_rate":           decayRate,
+		"review_schedule":      reviewSchedule,
+		"last_reviewed":        time.Now(),
+		"review_count":         0,
+		"access_count":         0,
 		"reinforcement_factor": m.config.ReinforcementFactor,
 	}
 
@@ -217,10 +217,10 @@ func (m *IntelligentMemoryManager) ExtractFacts(ctx context.Context, messages in
 // ProcessSearchResults processes search results with intelligent ranking.
 //
 // This method:
-//   1. Calculates relevance score for each result
-//   2. Applies Ebbinghaus decay based on age
-//   3. Combines relevance and decay for final score
-//   4. Sorts results by final score
+//  1. Calculates relevance score for each result
+//  2. Applies Ebbinghaus decay based on age
+//  3. Combines relevance and decay for final score
+//  4. Sorts results by final score
 //
 // Parameters:
 //   - ctx: Context for cancellation

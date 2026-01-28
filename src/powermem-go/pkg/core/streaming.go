@@ -45,9 +45,9 @@ type StreamingGetAllResult struct {
 // loading everything into memory at once.
 //
 // The method:
-//   1. Performs an initial search to get the first batch
-//   2. Continues fetching additional batches until all results are retrieved
-//   3. Sends each batch through the channel as it becomes available
+//  1. Performs an initial search to get the first batch
+//  2. Continues fetching additional batches until all results are retrieved
+//  3. Sends each batch through the channel as it becomes available
 //
 // Note: Vector search typically doesn't support offset-based pagination well.
 // This implementation performs a single search and returns results in batches.
@@ -212,7 +212,7 @@ func (c *Client) GetAllStream(ctx context.Context, batchSize int, opts ...GetAll
 		// Prepare storage options
 		storageOpts := &storage.GetAllOptions{
 			UserID:  getAllOpts.UserID,
-			AgentID:  getAllOpts.AgentID,
+			AgentID: getAllOpts.AgentID,
 			Limit:   batchSize,
 			Offset:  getAllOpts.Offset,
 		}

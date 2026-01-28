@@ -15,7 +15,7 @@ import (
 func TestConvertMemoryTypes(t *testing.T) {
 	// Test correctness of type conversion through actual usage
 	// Here we only verify consistency of type definitions
-	
+
 	coreMem := &powermem.Memory{
 		ID:                12345,
 		UserID:            "user123",
@@ -28,7 +28,7 @@ func TestConvertMemoryTypes(t *testing.T) {
 		RetentionStrength: 0.8,
 		Score:             0.95,
 	}
-	
+
 	storageMem := &storage.Memory{
 		ID:                coreMem.ID,
 		UserID:            coreMem.UserID,
@@ -41,7 +41,7 @@ func TestConvertMemoryTypes(t *testing.T) {
 		RetentionStrength: coreMem.RetentionStrength,
 		Score:             coreMem.Score,
 	}
-	
+
 	// Verify field consistency
 	assert.Equal(t, coreMem.ID, storageMem.ID)
 	assert.Equal(t, coreMem.UserID, storageMem.UserID)

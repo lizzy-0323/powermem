@@ -215,7 +215,7 @@ func TestBatchAdd(t *testing.T) {
 		assert.Equal(t, "user_batch_001", mem.UserID)
 		createdContents[mem.Content] = true
 	}
-	
+
 	// Check that all contents are present
 	for _, content := range contents {
 		assert.True(t, createdContents[content], "Content '%s' not found in results", content)
@@ -280,7 +280,7 @@ func TestBatchUpdate(t *testing.T) {
 		assert.NotNil(t, mem)
 		updatedMap[mem.ID] = mem.Content
 	}
-	
+
 	// Check that all IDs are present with correct content
 	for _, item := range items {
 		content, exists := updatedMap[item.ID]

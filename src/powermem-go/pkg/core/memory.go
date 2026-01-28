@@ -185,9 +185,9 @@ func NewClient(cfg *Config) (*Client, error) {
 // Add adds a new memory to the store.
 //
 // The method:
-//   1. Generates an embedding vector for the content
-//   2. Optionally checks for duplicates (if Infer option is enabled)
-//   3. Stores the memory with metadata
+//  1. Generates an embedding vector for the content
+//  2. Optionally checks for duplicates (if Infer option is enabled)
+//  3. Stores the memory with metadata
 //
 // If intelligent deduplication is enabled and a duplicate is found,
 // the memories are merged instead of creating a new one.
@@ -294,9 +294,9 @@ func (c *Client) Add(ctx context.Context, content string, opts ...AddOption) (*M
 // Search searches for memories using vector similarity.
 //
 // The method:
-//   1. Generates an embedding vector for the query
-//   2. Performs vector similarity search in the store
-//   3. Returns results sorted by similarity score
+//  1. Generates an embedding vector for the query
+//  2. Performs vector similarity search in the store
+//  3. Returns results sorted by similarity score
 //
 // Results can be filtered by UserID, AgentID, and custom metadata filters.
 //
@@ -366,8 +366,8 @@ func (c *Client) Get(ctx context.Context, id int64) (*Memory, error) {
 // Update updates an existing memory's content.
 //
 // The method:
-//   1. Generates a new embedding vector for the updated content
-//   2. Updates the memory in the store
+//  1. Generates a new embedding vector for the updated content
+//  2. Updates the memory in the store
 //
 // Parameters:
 //   - ctx: Context for cancellation

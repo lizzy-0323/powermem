@@ -60,9 +60,9 @@ func NewFactExtractorWithPrompt(llm llm.Provider, customPrompt string) *FactExtr
 // ExtractFacts extracts facts from messages.
 //
 // The extraction process:
-//   1. Parses messages into conversation format
-//   2. Calls LLM with fact extraction prompt
-//   3. Parses JSON response to extract facts list
+//  1. Parses messages into conversation format
+//  2. Calls LLM with fact extraction prompt
+//  3. Parses JSON response to extract facts list
 //
 // Facts are extracted with the following rules:
 //   - TEMPORAL: Always extract time info (dates, relative refs like "yesterday")

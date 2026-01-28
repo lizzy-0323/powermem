@@ -212,9 +212,9 @@ func initLLMFromConfig(cfg core.LLMConfig) (llm.Provider, error) {
 // Add adds a conversation and automatically extracts/updates the user profile.
 //
 // The method:
-//   1. Stores the conversation as a memory using the core Memory client
-//   2. Extracts user profile information from the conversation using LLM
-//   3. Updates the user profile in the profile store
+//  1. Stores the conversation as a memory using the core Memory client
+//  2. Extracts user profile information from the conversation using LLM
+//  3. Updates the user profile in the profile store
 //
 // Profile extraction can extract:
 //   - Unstructured profile content (default)

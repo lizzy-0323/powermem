@@ -69,7 +69,7 @@ func NewEbbinghausManager(decayRate, reinforcementFactor float64) *EbbinghausMan
 	return &EbbinghausManager{
 		decayRate:           decayRate,
 		reinforcementFactor: reinforcementFactor,
-		workingThreshold:   0.3,
+		workingThreshold:    0.3,
 		shortTermThreshold:  0.6,
 		longTermThreshold:   0.8,
 		initialRetention:    1.0,
@@ -145,7 +145,8 @@ func (m *EbbinghausManager) CalculateRetention(createdAt time.Time, lastAccessed
 // Reinforce strengthens a memory when it is accessed.
 //
 // The reinforcement formula is:
-//   new_strength = min(1.0, current_strength + reinforcement_factor * (1 - current_strength))
+//
+//	new_strength = min(1.0, current_strength + reinforcement_factor * (1 - current_strength))
 //
 // This means:
 //   - Memories with low strength get more reinforcement
@@ -318,7 +319,8 @@ func (m *EbbinghausManager) GenerateReviewSchedule(createdAt time.Time, importan
 // CalculateNextReview calculates the next review time for a memory.
 //
 // The next review time is based on the current retention strength:
-//   hours_until_review = 24 * (1 + strength * 10)
+//
+//	hours_until_review = 24 * (1 + strength * 10)
 //
 // This means:
 //   - Strong memories (strength=1.0) have longer intervals (24 * 11 = 264 hours ≈ 11 days)

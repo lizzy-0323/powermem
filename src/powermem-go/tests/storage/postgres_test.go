@@ -19,7 +19,7 @@ func setupPostgresTest(t *testing.T) (storage.VectorStore, string, func()) {
 	// Load .env file from project root
 	envPath := filepath.Join("..", "..", ".env")
 	_ = godotenv.Load(envPath)
-	
+
 	// Get PostgreSQL config from environment variables
 	host := os.Getenv("POSTGRES_HOST")
 	if host == "" {
@@ -85,12 +85,12 @@ func TestPostgresClient_Insert(t *testing.T) {
 	ctx := context.Background()
 
 	memory := &storage.Memory{
-		ID:               1,
-		UserID:           "test_user",
-		AgentID:          "test_agent",
-		Content:          "Test memory content",
-		Embedding:        []float64{0.1, 0.2, 0.3, 0.4, 0.5},
-		Metadata:         map[string]interface{}{"key": "value"},
+		ID:                1,
+		UserID:            "test_user",
+		AgentID:           "test_agent",
+		Content:           "Test memory content",
+		Embedding:         []float64{0.1, 0.2, 0.3, 0.4, 0.5},
+		Metadata:          map[string]interface{}{"key": "value"},
 		RetentionStrength: 1.0,
 	}
 
@@ -253,8 +253,8 @@ func TestPostgresClient_Search(t *testing.T) {
 
 	results, err := store.Search(ctx, queryVector, options)
 	assert.NoError(t, err)
-		assert.NotNil(t, results)
-		assert.LessOrEqual(t, len(results), 2)
+	assert.NotNil(t, results)
+	assert.LessOrEqual(t, len(results), 2)
 
 	// Verify results contain similarity scores
 	if len(results) > 0 {

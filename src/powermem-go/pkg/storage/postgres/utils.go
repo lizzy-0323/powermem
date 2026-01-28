@@ -25,7 +25,7 @@ func buildWhereClauseWithOffset(userID, agentID string, filters map[string]inter
 	if agentID != "" {
 		conditions = append(conditions, fmt.Sprintf("agent_id = $%d", argIndex))
 		args = append(args, agentID)
-		argIndex++
+		// argIndex++ // 为未来扩展预留
 	}
 
 	// Note: Currently not processing filters map for metadata conditions

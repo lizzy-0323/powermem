@@ -58,13 +58,13 @@ type ImportanceEvaluator struct {
 //   - personal: 0.1
 func NewImportanceEvaluator(llm llm.Provider) *ImportanceEvaluator {
 	return &ImportanceEvaluator{
-		llm:  llm,
+		llm:    llm,
 		useLLM: llm != nil,
 		criteriaWeights: map[string]float64{
-			"relevance":       0.3,
-			"novelty":         0.2,
+			"relevance":        0.3,
+			"novelty":          0.2,
 			"emotional_impact": 0.15,
-			"actionable":      0.15,
+			"actionable":       0.15,
 			"factual":          0.1,
 			"personal":         0.1,
 		},

@@ -55,7 +55,7 @@ func TestHNSWParams(t *testing.T) {
 	params := powermem.HNSWParams{
 		M:              16,
 		EfConstruction: 200,
-		EfSearch:      50,
+		EfSearch:       50,
 	}
 
 	assert.Equal(t, 16, params.M)
@@ -83,7 +83,7 @@ func TestVectorIndexConfig(t *testing.T) {
 		HNSWParams: &powermem.HNSWParams{
 			M:              16,
 			EfConstruction: 200,
-			EfSearch:      50,
+			EfSearch:       50,
 		},
 	}
 

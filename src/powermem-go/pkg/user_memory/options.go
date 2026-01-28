@@ -272,10 +272,10 @@ func WithExcludeRoles(roles []string) AddOption {
 func applyAddOptions(opts []AddOption) *AddOptions {
 	options := &AddOptions{
 		ProfileType:  "content", // Default to content type
-		Infer:         true,      // Default to enabled
+		Infer:        true,      // Default to enabled
 		Metadata:     make(map[string]interface{}),
 		Filters:      make(map[string]interface{}),
-		IncludeRoles: []string{"user"},   // Default include user role
+		IncludeRoles: []string{"user"},      // Default include user role
 		ExcludeRoles: []string{"assistant"}, // Default exclude assistant role
 	}
 	for _, opt := range opts {
@@ -396,7 +396,6 @@ func WithGetAgentID(agentID string) GetOption {
 	}
 }
 
-
 // UpdateOptions contains configuration options for Update operations.
 type UpdateOptions struct {
 	// UserID filters results to a specific user.
@@ -448,7 +447,6 @@ func WithUpdateMetadata(metadata map[string]interface{}) UpdateOption {
 		opts.Metadata = metadata
 	}
 }
-
 
 // DeleteOptions contains configuration options for Delete operations.
 type DeleteOptions struct {

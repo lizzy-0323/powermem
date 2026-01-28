@@ -236,9 +236,9 @@ type AgentMemoryConfig struct {
 // LoadConfigFromEnv loads configuration from environment variables.
 //
 // The function:
-//   1. Searches for .env or .env.example files (up to 5 directory levels up)
-//   2. Loads environment variables from the found file
-//   3. Parses environment variables into a Config struct
+//  1. Searches for .env or .env.example files (up to 5 directory levels up)
+//  2. Loads environment variables from the found file
+//  3. Parses environment variables into a Config struct
 //
 // Supported environment variables:
 //   - DATABASE_PROVIDER (sqlite, oceanbase, postgres)
@@ -279,7 +279,7 @@ func LoadConfigFromEnv() (*Config, error) {
 		// Use Python SDK compatible environment variables
 		port, _ := strconv.Atoi(getEnvOrDefault("OCEANBASE_PORT", "2881"))
 		dims, _ := strconv.Atoi(getEnvOrDefault("OCEANBASE_EMBEDDING_MODEL_DIMS", "1536"))
-		
+
 		vectorStoreConfig = map[string]interface{}{
 			"host":                 getEnvOrDefault("OCEANBASE_HOST", "127.0.0.1"),
 			"port":                 port,
@@ -292,7 +292,7 @@ func LoadConfigFromEnv() (*Config, error) {
 	case "sqlite":
 		// Use Python SDK compatible environment variables
 		dims, _ := strconv.Atoi(getEnvOrDefault("SQLITE_EMBEDDING_MODEL_DIMS", "1536"))
-		
+
 		vectorStoreConfig = map[string]interface{}{
 			"db_path":              getEnvOrDefault("SQLITE_PATH", "./powermem.db"),
 			"collection_name":      getEnvOrDefault("SQLITE_COLLECTION", "memories"),
@@ -302,7 +302,7 @@ func LoadConfigFromEnv() (*Config, error) {
 		// Use Python SDK compatible environment variables
 		port, _ := strconv.Atoi(getEnvOrDefault("POSTGRES_PORT", "5432"))
 		dims, _ := strconv.Atoi(getEnvOrDefault("POSTGRES_EMBEDDING_MODEL_DIMS", "1536"))
-		
+
 		vectorStoreConfig = map[string]interface{}{
 			"host":                 getEnvOrDefault("POSTGRES_HOST", "localhost"),
 			"port":                 port,
@@ -479,9 +479,9 @@ func getEnvOrDefault(key, defaultValue string) string {
 // FindEnvFile searches for .env or .env.example files.
 //
 // The search:
-//   1. Checks the current directory
-//   2. Searches up to 5 directory levels up
-//   3. Returns the first .env or .env.example file found
+//  1. Checks the current directory
+//  2. Searches up to 5 directory levels up
+//  3. Returns the first .env or .env.example file found
 //
 // Returns:
 //   - path: Path to the found file (empty if not found)

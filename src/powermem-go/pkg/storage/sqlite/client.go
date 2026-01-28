@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -50,6 +52,14 @@ type Config struct {
 //   - *Client: The SQLite client instance
 //   - error: Error if database connection or table creation fails
 func NewClient(cfg *Config) (*Client, error) {
+	// Create parent directory if it doesn't exist
+	dbDir := filepath.Dir(cfg.DBPath)
+	if dbDir != "" && dbDir != "." {
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			return nil, fmt.Errorf("NewSQLiteClient: failed to create directory: %w", err)
+		}
+	}
+
 	db, err := sql.Open("sqlite3", cfg.DBPath+"?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("NewSQLiteClient: %w", err)

@@ -51,9 +51,9 @@ func NewDedupManager(store storage.VectorStore, threshold float64) *DedupManager
 // CheckDuplicate checks if a memory is a duplicate of an existing memory.
 //
 // The method:
-//   1. Searches for similar memories using vector similarity
-//   2. Compares similarity scores against the threshold
-//   3. Returns the first memory that exceeds the threshold
+//  1. Searches for similar memories using vector similarity
+//  2. Compares similarity scores against the threshold
+//  3. Returns the first memory that exceeds the threshold
 //
 // Parameters:
 //   - ctx: Context for cancellation
@@ -91,10 +91,10 @@ func (m *DedupManager) CheckDuplicate(ctx context.Context, embedding []float64, 
 // MergeMemories merges a new memory with an existing memory.
 //
 // The merge strategy:
-//   1. Combines content by appending new content to existing content
-//   2. Averages the embedding vectors
-//   3. Normalizes the resulting embedding
-//   4. Updates the existing memory with merged data
+//  1. Combines content by appending new content to existing content
+//  2. Averages the embedding vectors
+//  3. Normalizes the resulting embedding
+//  4. Updates the existing memory with merged data
 //
 // Note: More sophisticated merge strategies (e.g., using LLM) can be implemented
 // by extending this method.

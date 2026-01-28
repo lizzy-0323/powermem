@@ -39,8 +39,8 @@ func main() {
 		config.Intelligence = &powermem.IntelligenceConfig{}
 	}
 	config.Intelligence.Enabled = true
-	config.Intelligence.DecayRate = 0.1               // Slower decay for demonstration
-	config.Intelligence.ReinforcementFactor = 0.3     // Moderate reinforcement
+	config.Intelligence.DecayRate = 0.1           // Slower decay for demonstration
+	config.Intelligence.ReinforcementFactor = 0.3 // Moderate reinforcement
 
 	// Create client
 	client, err := powermem.NewClient(config)
@@ -105,7 +105,7 @@ func main() {
 		simulatedTime := memory.CreatedAt.Add(time.Duration(interval.hours * float64(time.Hour)))
 		retention := ebManager.CalculateRetention(memory.CreatedAt, &simulatedTime)
 		memoryType := ebManager.ClassifyMemoryType(retention)
-		
+
 		fmt.Printf("%-25s | Retention: %.1f%% | Type: %s\n",
 			interval.description,
 			retention*100,
@@ -119,10 +119,10 @@ func main() {
 	fmt.Println(repeat("=", 80))
 
 	fmt.Println("\nDemonstrating how accessing memories strengthens them...")
-	
+
 	initialRetention := 0.5
 	fmt.Printf("Initial retention: %.1f%%\n", initialRetention*100)
-	
+
 	accessCount := 5
 	currentRetention := initialRetention
 	for i := 1; i <= accessCount; i++ {
@@ -136,14 +136,14 @@ func main() {
 	fmt.Println(repeat("=", 80))
 
 	fmt.Println("\nGenerating optimal review schedule based on importance...")
-	
+
 	importanceScores := []float64{0.3, 0.5, 0.7, 0.9}
 	for _, importance := range importanceScores {
 		schedule := ebManager.GenerateReviewSchedule(time.Now(), importance)
 		fmt.Printf("\nImportance: %.1f\n", importance)
 		fmt.Println("Review schedule:")
 		for i, reviewTime := range schedule {
-			duration := reviewTime.Sub(time.Now())
+			duration := time.Until(reviewTime)
 			fmt.Printf("  Review #%d: %.1f hours from now\n", i+1, duration.Hours())
 		}
 	}
@@ -154,7 +154,7 @@ func main() {
 	fmt.Println(repeat("=", 80))
 
 	fmt.Println("\nAdding memories with different characteristics...")
-	
+
 	memoriesWithImportance := []struct {
 		content    string
 		importance float64
@@ -179,7 +179,7 @@ func main() {
 		// Calculate initial retention
 		retention := ebManager.CalculateRetention(added.CreatedAt, nil)
 		memType := ebManager.ClassifyMemoryType(retention)
-		
+
 		fmt.Printf("\n✓ Added: %s\n", mem.content)
 		fmt.Printf("  Importance: %.1f | Retention: %.1f%% | Type: %s\n",
 			mem.importance, retention*100, memType)
@@ -199,7 +199,7 @@ func main() {
 	} else {
 		fmt.Printf("\nAnalyzing %d memories:\n", len(allMemories))
 		fmt.Println(repeat("-", 60))
-		
+
 		for _, mem := range allMemories {
 			// Calculate current retention
 			retention := ebManager.CalculateRetention(mem.CreatedAt, mem.LastAccessedAt)

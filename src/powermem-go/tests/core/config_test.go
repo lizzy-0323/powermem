@@ -19,11 +19,11 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		{
 			name: "valid config with SQLite",
 			envVars: map[string]string{
-				"DATABASE_PROVIDER": "sqlite",
-				"SQLITE_PATH":       "./test.db",
-				"LLM_PROVIDER":      "openai",
-				"LLM_API_KEY":       "test-key",
-				"LLM_MODEL":         "gpt-4",
+				"DATABASE_PROVIDER":  "sqlite",
+				"SQLITE_PATH":        "./test.db",
+				"LLM_PROVIDER":       "openai",
+				"LLM_API_KEY":        "test-key",
+				"LLM_MODEL":          "gpt-4",
 				"EMBEDDING_PROVIDER": "openai",
 				"EMBEDDING_API_KEY":  "test-key",
 				"EMBEDDING_MODEL":    "text-embedding-3-small",
@@ -33,11 +33,11 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		{
 			name: "valid config with Qwen",
 			envVars: map[string]string{
-				"DATABASE_PROVIDER": "sqlite",
-				"SQLITE_PATH":       "./test.db",
-				"LLM_PROVIDER":      "qwen",
-				"LLM_API_KEY":       "test-key",
-				"LLM_MODEL":         "qwen-plus",
+				"DATABASE_PROVIDER":  "sqlite",
+				"SQLITE_PATH":        "./test.db",
+				"LLM_PROVIDER":       "qwen",
+				"LLM_API_KEY":        "test-key",
+				"LLM_MODEL":          "qwen-plus",
 				"EMBEDDING_PROVIDER": "qwen",
 				"EMBEDDING_API_KEY":  "test-key",
 				"EMBEDDING_MODEL":    "text-embedding-v4",
@@ -163,7 +163,7 @@ func TestConfigValidate(t *testing.T) {
 func TestFindEnvFile(t *testing.T) {
 	// Test finding .env file
 	envPath, found := powermem.FindEnvFile()
-	
+
 	// This test depends on actual file system state
 	// We only verify the function doesn't panic
 	assert.NotNil(t, envPath)
@@ -192,7 +192,7 @@ func TestDefaultConfig(t *testing.T) {
 
 	err := config.Validate()
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "openai", config.LLM.Provider)
 	assert.Equal(t, "openai", config.Embedder.Provider)
 	assert.Equal(t, "sqlite", config.VectorStore.Provider)

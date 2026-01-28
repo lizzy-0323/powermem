@@ -115,7 +115,7 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 
 	// Generate hash for content (compatible with Python SDK)
 	hash := generateHash(memory.Content)
-	
+
 	now := time.Now().Format(time.RFC3339)
 
 	_, err = c.db.ExecContext(ctx, query,
@@ -359,7 +359,7 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Handle nullable fields
 	if userID.Valid {
 		memory.UserID = userID.String
@@ -382,7 +382,7 @@ func (c *Client) scanMemory(row *sql.Row) (*storage.Memory, error) {
 		if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 			return nil, err
 		}
-		
+
 		// Extract retention_strength from metadata if present
 		if memory.Metadata != nil {
 			if rs, ok := memory.Metadata["retention_strength"].(float64); ok {
@@ -459,7 +459,7 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 				return nil, err
 			}
 		}
-		
+
 		// Handle nullable fields
 		if userID.Valid {
 			memory.UserID = userID.String
@@ -482,7 +482,7 @@ func (c *Client) scanMemories(rows *sql.Rows, hasScore bool) ([]*storage.Memory,
 			if err := json.Unmarshal(metadataJSON, &memory.Metadata); err != nil {
 				return nil, err
 			}
-			
+
 			// Extract retention_strength from metadata if present
 			if memory.Metadata != nil {
 				if rs, ok := memory.Metadata["retention_strength"].(float64); ok {
